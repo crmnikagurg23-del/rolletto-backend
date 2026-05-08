@@ -11,7 +11,7 @@ app.use(express.json());
 const SETTINGS = {
     "day1": {
         title: "Matches of May 8",
-        matches: ["Brazil vs Croatia", "France vs Poland"],
+        matches: ["Brazil vs Croatia", "France vs Poland","France vs Poland","France vs Poland","France vs Poland","France vs Poland"],
         results: ["1", "2"]
     },
     "day2": {
