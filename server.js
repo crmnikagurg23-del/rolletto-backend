@@ -17,7 +17,7 @@ const SETTINGS = {
     "day2": {
         title: "9 მაისის მატჩები",
         matches: ["არგენტინა vs მექსიკა", "ესპანეთი vs გერმანია"],
-        results: ["x", "x"] // სანამ არ დასრულდება, დატოვე ცარიელი
+        results: ["", ""] // სანამ არ დასრულდება, დატოვე ცარიელი
     }
 };
 
@@ -34,7 +34,7 @@ const User = mongoose.model('User', new mongoose.Schema({
     predictions: [{ dayId: String, answers: Object }]
 }));
 
-// შესვლა და რეგისტრაცია
+// შესვლა და რეგისტრაცია (ახლა აბრუნებს იუზერის ქულასაც)
 app.post('/api/check-user', async (req, res) => {
     try {
         const { user, password } = req.body;
@@ -43,14 +43,19 @@ app.post('/api/check-user', async (req, res) => {
         if (!existingUser) {
             existingUser = new User({ username: user, password: password });
             await existingUser.save();
-            return res.json({ success: true, allDays: SETTINGS, userPredictions: [] });
+            return res.json({ success: true, allDays: SETTINGS, userPredictions: [], userScore: 0 });
         }
 
         if (existingUser.password !== password) {
             return res.json({ success: false, message: "არასწორი პაროლი!" });
         }
 
-        res.json({ success: true, allDays: SETTINGS, userPredictions: existingUser.predictions });
+        res.json({ 
+            success: true, 
+            allDays: SETTINGS, 
+            userPredictions: existingUser.predictions,
+            userScore: existingUser.totalScore
+        });
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
@@ -89,11 +94,11 @@ app.get('/api/calculate-scores', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
-// ლიდერბორდის და ხალხის სრული წაშლა
+// ბაზის სრული გასუფთავება (ლიდერბორდიდან ხალხის გაქრობა)
 app.get('/api/reset-leaderboard', async (req, res) => {
     try {
         await User.deleteMany({}); 
-        res.json({ success: true, message: "ლიდერბორდი და იუზერები წაშლილია!" });
+        res.json({ success: true, message: "ლიდერბორდი გასუფთავდა!" });
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
