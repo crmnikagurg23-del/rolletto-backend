@@ -10,7 +10,6 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected'))
   .catch(err => console.log('❌ DB Error:', err));
 
-// მონაცემთა ბაზის მოდელი
 const User = mongoose.model('User', new mongoose.Schema({
     username: { type: String, unique: true, required: true },
     totalScore: { type: Number, default: 0 },
@@ -37,10 +36,10 @@ app.get('/api/check-user', async (req, res) => {
             existingUser = new User({ username: user });
             await existingUser.save();
         }
-        // ვუბრუნებთ თამაშებს და იუზერის ძველ პასუხებსაც
         res.json({ 
             success: true, 
             games: CURRENT_GAMES, 
+            correctAnswers: CORRECT_RESULTS,
             myLastPredictions: existingUser.predictions.length > 0 ? existingUser.predictions[existingUser.predictions.length-1].answers : null 
         });
     } catch (error) { res.status(500).json({ success: false }); }
