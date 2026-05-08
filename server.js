@@ -6,7 +6,7 @@ app.use(cors());
 app.use(express.json());
 
 // =========================================================
-// 📢 ADMIN PANEL
+// 📢 ADMIN PANEL - მართე თამაშები და შედეგები აქედან
 // =========================================================
 const SETTINGS = {
     "day1": {
@@ -30,29 +30,29 @@ const User = mongoose.model('User', new mongoose.Schema({
     predictions: [{ dayId: String, answers: Object }]
 }));
 
+// Login & User Status
 app.post('/api/check-user', async (req, res) => {
     try {
         const { user, password } = req.body;
-
-        // ვალიდაცია: მინიმუმ 3 სიმბოლო და არ იყოს მხოლოდ ციფრები
-        const onlyNumbers = /^\d+$/.test(user);
-        if (user.length < 3) return res.json({ success: false, message: "Username too short (min 3)!" });
-        if (onlyNumbers) return res.json({ success: false, message: "Username cannot be only numbers!" });
-        if (user.length > 35) return res.json({ success: false, message: "Username too long!" });
-
         let existingUser = await User.findOne({ username: user });
 
         if (!existingUser) {
             existingUser = new User({ username: user, password: password });
             await existingUser.save();
-            return res.json({ success: true, allDays: SETTINGS, userPredictions: [], userScore: 0 });
-        }
-
-        if (existingUser.password !== password) {
+        } else if (existingUser.password !== password) {
             return res.json({ success: false, message: "Incorrect password!" });
         }
 
-        res.json({ success: true, allDays: SETTINGS, userPredictions: existingUser.predictions, userScore: existingUser.totalScore });
+        // 🏆 რეალური რანკის გამოთვლა
+        const rank = await User.countDocuments({ totalScore: { $gt: existingUser.totalScore } }) + 1;
+
+        res.json({ 
+            success: true, 
+            allDays: SETTINGS, 
+            userPredictions: existingUser.predictions,
+            userScore: existingUser.totalScore,
+            userRank: rank 
+        });
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
