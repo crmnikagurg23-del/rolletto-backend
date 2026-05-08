@@ -6,23 +6,23 @@ app.use(cors());
 app.use(express.json());
 
 // =========================================================
-// 📢 მართვის პანელი - შეცვალე მხოლოდ ეს ნაწილი!
+// 📢 ADMIN PANEL - Edit games here
 // =========================================================
 const SETTINGS = {
     "day1": {
-        title: "8 მაისის მატჩები",
-        matches: ["ბრაზილია vs ხორვატია", "საფრანგეთი vs პოლონეთი"],
-        results: ["1", "2"] // შედეგები: "1", "X", ან "2"
+        title: "Matches of May 8",
+        matches: ["Brazil vs Croatia", "France vs Poland"],
+        results: ["1", "2"]
     },
     "day2": {
-        title: "9 მაისის მატჩები",
-        matches: ["არგენტინა vs მექსიკა", "ესპანეთი vs გერმანია"],
-        results: ["", ""] // სანამ არ დასრულდება, დატოვე ცარიელი
+        title: "Matches of May 9",
+        matches: ["Argentina vs Mexico", "Spain vs Germany"],
+        results: ["", ""]
     }
 };
 
 // =========================================================
-// ⛔ აქედან ქვემოთ კოდს არ შეეხო!
+// ⛔ DO NOT EDIT BELOW THIS LINE
 // =========================================================
 
 mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected'));
@@ -34,7 +34,6 @@ const User = mongoose.model('User', new mongoose.Schema({
     predictions: [{ dayId: String, answers: Object }]
 }));
 
-// შესვლა და რეგისტრაცია (ახლა აბრუნებს იუზერის ქულასაც)
 app.post('/api/check-user', async (req, res) => {
     try {
         const { user, password } = req.body;
@@ -47,7 +46,7 @@ app.post('/api/check-user', async (req, res) => {
         }
 
         if (existingUser.password !== password) {
-            return res.json({ success: false, message: "არასწორი პაროლი!" });
+            return res.json({ success: false, message: "Incorrect password!" });
         }
 
         res.json({ 
@@ -59,13 +58,12 @@ app.post('/api/check-user', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
-// პროგნოზის შენახვა
 app.post('/api/save-prediction', async (req, res) => {
     try {
         const { username, dayId, answers } = req.body;
         const user = await User.findOne({ username });
         if (user.predictions.some(p => p.dayId === dayId)) {
-            return res.json({ success: false, message: "უკვე შევსებული გაქვთ!" });
+            return res.json({ success: false, message: "Already predicted for this day!" });
         }
         user.predictions.push({ dayId, answers });
         await user.save();
@@ -73,7 +71,6 @@ app.post('/api/save-prediction', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
-// ქულების დათვლა
 app.get('/api/calculate-scores', async (req, res) => {
     try {
         const users = await User.find();
@@ -90,19 +87,17 @@ app.get('/api/calculate-scores', async (req, res) => {
             user.totalScore = score;
             await user.save();
         }
-        res.json({ success: true, message: "ქულები გადათვლილია!" });
+        res.json({ success: true, message: "Scores recalculated successfully!" });
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
-// ბაზის სრული გასუფთავება (ლიდერბორდიდან ხალხის გაქრობა)
 app.get('/api/reset-leaderboard', async (req, res) => {
     try {
         await User.deleteMany({}); 
-        res.json({ success: true, message: "ლიდერბორდი გასუფთავდა!" });
+        res.json({ success: true, message: "Leaderboard and users cleared!" });
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
-// ლიდერბორდის გამოტანა
 app.get('/api/leaderboard', async (req, res) => {
     const top = await User.find().sort({ totalScore: -1 }).limit(10).lean();
     res.json({ topData: top.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore })) });
