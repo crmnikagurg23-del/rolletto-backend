@@ -23,7 +23,7 @@ const SETTINGS = {
         title: "Matches of May 8",
         matches: ["Brazil vs Croatia", "France vs Poland","France vs Poland","France vs Poland","France vs Poland","France vs Poland"],
         results: ["1", "2","1", "2","1", "2","1", "2","1", "2","1", "2","1", "2","1", "2"]
-    }
+    },
 };
 
 mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected'));
