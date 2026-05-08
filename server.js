@@ -8,38 +8,46 @@ app.use(express.json());
 // =========================================================
 // 📢 მართვის პანელი - შეცვალე მხოლოდ ეს ნაწილი!
 // =========================================================
-
 const SETTINGS = {
     "day1": {
         title: "დღევანდელი (8 მაისი)",
         matches: ["ბრაზილია vs ხორვატია", "საფრანგეთი vs პოლონეთი"],
-        results: ["1", "2"] // თუ ჯერ არ დასრულებულა, დატოვე ცარიელი ""
+        results: ["1", "2"]
     },
     "day2": {
         title: "ხვალ (9 მაისი)",
         matches: ["არგენტინა vs მექსიკა", "ესპანეთი vs გერმანია"],
-        results: ["1", "2"] 
-    },
-    // აქ შეგიძლია დაამატო day3, day4 და ა.შ.
+        results: ["", ""] 
+    }
 };
-
-// =========================================================
-// ⛔ აქედან ქვემოთ კოდს არ შეეხო!
-// =========================================================
 
 mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected'));
 
+// მონაცემთა მოდელი პაროლით
 const User = mongoose.model('User', new mongoose.Schema({
     username: { type: String, unique: true, required: true },
+    password: { type: String, required: true }, // ახალი ველი
     totalScore: { type: Number, default: 0 },
     predictions: [{ dayId: String, answers: Object }]
 }));
 
-app.get('/api/check-user', async (req, res) => {
+app.post('/api/check-user', async (req, res) => {
     try {
-        const { user } = req.query;
+        const { user, password } = req.body;
         let existingUser = await User.findOne({ username: user });
-        if (!existingUser) { existingUser = new User({ username: user }); await existingUser.save(); }
+
+        if (!existingUser) {
+            // თუ იუზერი არ არსებობს, ვქმნით ახალს მოწოდებული პაროლით
+            existingUser = new User({ username: user, password: password });
+            await existingUser.save();
+            return res.json({ success: true, allDays: SETTINGS, userPredictions: [], isNew: true });
+        }
+
+        // თუ არსებობს, ვამოწმებთ პაროლს
+        if (existingUser.password !== password) {
+            return res.json({ success: false, message: "არასწორი პაროლი!" });
+        }
+
         res.json({ success: true, allDays: SETTINGS, userPredictions: existingUser.predictions });
     } catch (e) { res.status(500).json({ success: false }); }
 });
@@ -49,7 +57,7 @@ app.post('/api/save-prediction', async (req, res) => {
         const { username, dayId, answers } = req.body;
         const user = await User.findOne({ username });
         if (user.predictions.some(p => p.dayId === dayId)) {
-            return res.json({ success: false, message: "ამ დღის პროგნოზი უკვე გაკეთებულია!" });
+            return res.json({ success: false, message: "უკვე შევსებული გაქვთ!" });
         }
         user.predictions.push({ dayId, answers });
         await user.save();
