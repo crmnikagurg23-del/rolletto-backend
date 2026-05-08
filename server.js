@@ -12,8 +12,8 @@ const SETTINGS = {
     "day1": {
         date: "2026-05-08", // დღევანდელი
         title: "May 8",
-        matches: ["Brazil vs Croatia", "France vs Poland"],
-        results: ["1", "2"]
+        matches: ["Brazil vs Croatia", "France vs Poland","France vs Poland","France vs Poland","France vs Poland","France vs Poland"],
+        results: ["", "","","","","","","","","","","",]
     },
     "day2": {
         date: "2026-05-09", // მომავალი
