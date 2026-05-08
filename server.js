@@ -6,64 +6,52 @@ app.use(cors());
 app.use(express.json());
 
 // =========================================================
-// 📢 ADMIN PANEL - მართე თამაშები და შედეგები აქედან
+// 📢 ADMIN PANEL - თარიღები ჩაწერე YYYY-MM-DD ფორმატში
 // =========================================================
 const SETTINGS = {
     "day1": {
-        title: "Matches of May 8",
-        matches: ["Brazil vs Croatia", "France vs Poland","France vs Poland","France vs Poland","France vs Poland","France vs Poland"],
-        results: ["1", "2","1", "2","1", "2","1", "2","1", "2","1", "2","1", "2","1", "2"]
+        date: "2026-05-08", // დღევანდელი
+        title: "May 8",
+        matches: ["Brazil vs Croatia", "France vs Poland"],
+        results: ["1", "2"]
     },
     "day2": {
-        title: "Matches of May 9",
+        date: "2026-05-09", // მომავალი
+        title: "May 9",
         matches: ["Argentina vs Mexico", "Spain vs Germany"],
-        results: ["2", "2"]
-    },
-    "day3": {
-        title: "Matches of May 8",
-        matches: ["Brazil vs Croatia", "France vs Poland","France vs Poland","France vs Poland","France vs Poland","France vs Poland"],
-        results: ["1", "2","1", "2","1", "2","1", "2","1", "2","1", "2","1", "2","1", "2"]
-    },
+        results: ["", ""]
+    }
 };
 
 mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected'));
 
 const User = mongoose.model('User', new mongoose.Schema({
-    username: { type: String, unique: true, required: true, maxlength: 35 },
+    username: { type: String, unique: true, required: true },
     password: { type: String, required: true },
     totalScore: { type: Number, default: 0 },
     predictions: [{ dayId: String, answers: Object }]
 }));
 
-// Login & User Status
 app.post('/api/check-user', async (req, res) => {
     try {
         const { user, password } = req.body;
         let existingUser = await User.findOne({ username: user });
-
         if (!existingUser) {
             existingUser = new User({ username: user, password: password });
             await existingUser.save();
         } else if (existingUser.password !== password) {
             return res.json({ success: false, message: "Incorrect password!" });
         }
-
-        // 🏆 რეალური რანკის გამოთვლა
         const rank = await User.countDocuments({ totalScore: { $gt: existingUser.totalScore } }) + 1;
-
-        res.json({ 
-            success: true, 
-            allDays: SETTINGS, 
-            userPredictions: existingUser.predictions,
-            userScore: existingUser.totalScore,
-            userRank: rank 
-        });
+        res.json({ success: true, allDays: SETTINGS, userPredictions: existingUser.predictions, userScore: existingUser.totalScore, userRank: rank });
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
 app.post('/api/save-prediction', async (req, res) => {
     try {
         const { username, dayId, answers } = req.body;
+        const now = new Date().toISOString().split('T')[0];
+        if (SETTINGS[dayId].date > now) return res.json({ success: false, message: "Too early!" });
         const user = await User.findOne({ username });
         if (user.predictions.some(p => p.dayId === dayId)) return res.json({ success: false, message: "Already submitted!" });
         user.predictions.push({ dayId, answers });
@@ -88,10 +76,6 @@ app.get('/api/calculate-scores', async (req, res) => {
         }
         res.json({ success: true, message: "Scores recalculated!" });
     } catch (e) { res.status(500).json({ success: false }); }
-});
-
-app.get('/api/reset-leaderboard', async (req, res) => {
-    try { await User.deleteMany({}); res.json({ success: true, message: "Cleared!" }); } catch (e) { res.status(500).json({ success: false }); }
 });
 
 app.get('/api/leaderboard', async (req, res) => {
