@@ -17,7 +17,7 @@ const SETTINGS = {
     "day2": {
         title: "Matches of May 9",
         matches: ["Argentina vs Mexico", "Spain vs Germany"],
-        results: ["", ""]
+        results: ["2", "2"]
     }
 };
 
