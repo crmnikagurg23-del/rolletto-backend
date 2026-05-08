@@ -18,6 +18,11 @@ const SETTINGS = {
         title: "Matches of May 9",
         matches: ["Argentina vs Mexico", "Spain vs Germany"],
         results: ["2", "2"]
+    },
+    "day3": {
+        title: "Matches of May 8",
+        matches: ["Brazil vs Croatia", "France vs Poland","France vs Poland","France vs Poland","France vs Poland","France vs Poland"],
+        results: ["1", "2","1", "2","1", "2","1", "2","1", "2","1", "2","1", "2","1", "2"]
     }
 };
 
