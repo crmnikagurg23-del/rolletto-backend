@@ -8,16 +8,16 @@ app.use(express.json());
 app.use(cors());
 
 // =========================================================
-// 🔗 FIXED CONFIGURATION (NO SRV - BYPASSES DNS ISSUES)
+// 🔗 CONFIGURATION (USING ENVIRONMENT VARIABLES FOR STABILITY)
 // =========================================================
-const MONGO_URI = "mongodb://nikagurgenidze96:nika1996@ac-p2pvdqf-shard-00-00.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-01.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-02.p9v8t.mongodb.net:27017/worldcup?ssl=true&replicaSet=atlas-13pivk-shard-0&authSource=admin&retryWrites=true&w=majority"; 
+const MONGO_URI = process.env.MONGO_URI || "mongodb://nikagurgenidze96:nika1996@ac-p2pvdqf-shard-00-00.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-01.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-02.p9v8t.mongodb.net:27017/worldcup?ssl=true&replicaSet=atlas-13pivk-shard-0&authSource=admin&retryWrites=true&w=majority"; 
 const SHEET_ID = "1rVe2OxD7wX6UR2h8xp1AmBEQ6Lx1J6S2J1qOizZK96s"; 
 
 const GAMES_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Games`;
 const USERS_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1`;
 
 mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => console.log("✅ Database Ready - Connected via IP"))
+    .then(() => console.log("✅ Database Ready - Connected via IP Environment"))
     .catch(err => console.log("❌ DB Connection Error:", err));
 
 const userSchema = new mongoose.Schema({
