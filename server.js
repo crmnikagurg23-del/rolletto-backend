@@ -8,21 +8,23 @@ app.use(express.json());
 app.use(cors());
 
 // =========================================================
-// 🔗 სწორი მონაცემები (Username: crmnikagurg23_db_user)
+// 🔗 განახლებული მონაცემები
 // =========================================================
-const MONGO_URI = "mongodb://crmnikagurg23_db_user:i5IHVZwDyQAszsEr@ac-p2pvdqf-shard-00-00.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-01.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-02.p9v8t.mongodb.net:27017/worldcup?ssl=true&replicaSet=atlas-13pivk-shard-0&authSource=admin&retryWrites=true&w=majority";
+const DB_USER = "crmnikagurg23_db_user";
+const DB_PASS = "nika2026rolletto";
+const MONGO_URI = `mongodb://${DB_USER}:${DB_PASS}@ac-p2pvdqf-shard-00-00.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-01.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-02.p9v8t.mongodb.net:27017/worldcup?ssl=true&replicaSet=atlas-13pivk-shard-0&authSource=admin&retryWrites=true&w=majority`;
 
 const SHEET_ID = "1rVe2OxD7wX6UR2h8xp1AmBEQ6Lx1J6S2J1qOizZK96s";
-const GAMES_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Games`;
 const USERS_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1`;
+const GAMES_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Games`;
 
 mongoose.connect(MONGO_URI, { 
     useNewUrlParser: true, 
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 5000 
+    serverSelectionTimeoutMS: 10000 
 })
 .then(() => console.log("✅✅✅ DATABASE CONNECTED!"))
-.catch(err => console.log("❌❌❌ DB ERROR:", err.message));
+.catch(err => console.log("❌❌❌ DB CONNECTION ERROR:", err.message));
 
 const userSchema = new mongoose.Schema({
     username: { type: String, unique: true, lowercase: true, trim: true },
@@ -81,4 +83,4 @@ app.post('/api/save-prediction', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Server running on ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server on port ${PORT}`));
