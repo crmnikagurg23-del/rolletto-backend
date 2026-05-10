@@ -8,9 +8,10 @@ app.use(express.json());
 app.use(cors());
 
 // =========================================================
-// 🔗 CONFIGURATION (UPDATED WITH NEW PASSWORD)
+// 🔗 FINAL CONFIGURATION (NEW PASSWORD INCLUDED)
 // =========================================================
-const MONGO_URI = "mongodb://nikagurgenidze96:nika19962026@ac-p2pvdqf-shard-00-00.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-01.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-02.p9v8t.mongodb.net:27017/worldcup?ssl=true&replicaSet=atlas-13pivk-shard-0&authSource=admin&retryWrites=true&w=majority"; 
+const DB_PASS = "i5IHVZwDyQAszsEr";
+const MONGO_URI = `mongodb://nikagurgenidze96:${DB_PASS}@ac-p2pvdqf-shard-00-00.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-01.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-02.p9v8t.mongodb.net:27017/worldcup?ssl=true&replicaSet=atlas-13pivk-shard-0&authSource=admin&retryWrites=true&w=majority`;
 
 const SHEET_ID = "1rVe2OxD7wX6UR2h8xp1AmBEQ6Lx1J6S2J1qOizZK96s"; 
 const GAMES_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Games`;
@@ -18,10 +19,11 @@ const USERS_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz
 
 mongoose.connect(MONGO_URI, { 
     useNewUrlParser: true, 
-    useUnifiedTopology: true 
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 20000 
 })
-.then(() => console.log("✅ Database Ready! Connection successful."))
-.catch(err => console.log("❌ DB Connection Error:", err));
+.then(() => console.log("✅ SUCCESS: Database Connected!"))
+.catch(err => console.log("❌ CONNECTION ERROR:", err.message));
 
 const userSchema = new mongoose.Schema({
     username: { type: String, unique: true, lowercase: true, trim: true },
@@ -53,7 +55,7 @@ async function getDynamicSettings() {
     } catch (e) { return {}; }
 }
 
-// 🔐 AUTHENTICATION
+// 🔐 LOGIN / REGISTER
 app.post('/api/check-user', async (req, res) => {
     try {
         const { user, password } = req.body;
@@ -61,13 +63,13 @@ app.post('/api/check-user', async (req, res) => {
         const sheetRes = await axios.get(USERS_SHEET_URL);
         const allowed = sheetRes.data.split('\n').map(r => r.split(',')[0].replace(/"/g, '').trim().toLowerCase());
 
-        if (!allowed.includes(usernameLower)) return res.json({ success: false, message: "User not found!" });
+        if (!allowed.includes(usernameLower)) return res.json({ success: false, message: "User not authorized" });
 
         let u = await User.findOne({ username: usernameLower });
         if (!u) {
             u = new User({ username: usernameLower, password: password });
             await u.save();
-        } else if (u.password !== password) return res.json({ success: false, message: "Incorrect password!" });
+        } else if (u.password !== password) return res.json({ success: false, message: "Incorrect password" });
 
         const allDays = await getDynamicSettings();
         const users = await User.find().sort({ totalScore: -1, lastSubmissionDate: 1 });
@@ -76,16 +78,14 @@ app.post('/api/check-user', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
-// 💾 SAVE PREDICTIONS
+// 💾 SAVE PREDICTION
 app.post('/api/save-prediction', async (req, res) => {
     try {
         const { username, dayId, answers } = req.body;
         const u = await User.findOne({ username: username.toLowerCase().trim() });
-        if (!u || u.predictions.find(p => p.dayId === dayId)) return res.json({ success: false, message: "Error!" });
-        
-        const now = new Date();
-        u.predictions.push({ dayId, answers, createdAt: now });
-        u.lastSubmissionDate = now;
+        if (!u || u.predictions.find(p => p.dayId === dayId)) return res.json({ success: false });
+        u.predictions.push({ dayId, answers });
+        u.lastSubmissionDate = new Date();
         await u.save();
         res.json({ success: true });
     } catch (e) { res.status(500).json({ success: false }); }
@@ -99,7 +99,7 @@ app.get('/api/leaderboard', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
-// 🔄 RECALCULATE SCORES
+// 🔄 RECALCULATE
 app.get('/api/recalculate-all', async (req, res) => {
     try {
         const settings = await getDynamicSettings();
@@ -116,7 +116,7 @@ app.get('/api/recalculate-all', async (req, res) => {
             user.totalScore = total;
             await user.save();
         }
-        res.json({ success: true, message: "Updated!" });
+        res.json({ success: true, message: "Recalculated successfully" });
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
