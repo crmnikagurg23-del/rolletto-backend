@@ -13,7 +13,7 @@ app.use(express.json());
 const MONGO_URI = process.env.MONGO_URI; 
 const SHEET_ID = "1rVe2OxD7wX6UR2h8xp1AmBEQ6Lx1J6S2J1qOizZK96s";
 
-// ლინკები სხვადასხვა ტაბისთვის
+// URLs for different tabs
 const USERS_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1`;
 const GAMES_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Games`;
 
@@ -27,22 +27,22 @@ const User = mongoose.model('User', new mongoose.Schema({
 }));
 
 // =========================================================
-// 🔄 DYNAMIC SETTINGS LOADER (Google Sheets-იდან)
+// 🔄 DYNAMIC SETTINGS LOADER (From Google Sheets)
 // =========================================================
 async function getDynamicSettings() {
     try {
         const res = await axios.get(GAMES_SHEET_URL);
-        const rows = res.data.split('\n').slice(1); // გამოვტოვოთ ჰედერი
+        const rows = res.data.split('\n').slice(1); // Skip header
         const settings = {};
 
         rows.forEach(row => {
             const cols = row.split(',').map(c => c.replace(/"/g, '').trim());
-            if (cols[0]) { // თუ dayId არსებობს
+            if (cols[0]) { // Check if dayId exists
                 settings[cols[0]] = {
                     title: cols[1],
                     date: cols[2],
-                    matches: cols[3] ? cols[3].split('|') : [], // თამაშები გაყავი სიმბოლოთი |
-                    results: cols[4] ? cols[4].split('|') : null // შედეგები გაყავი სიმბოლოთი |
+                    matches: cols[3] ? cols[3].split('|') : [],
+                    results: cols[4] ? cols[4].split('|') : null
                 };
             }
         });
@@ -58,23 +58,28 @@ app.post('/api/check-user', async (req, res) => {
         const { user, password } = req.body;
         const usernameLower = user.toLowerCase().trim();
 
-        // 1. იუზერების შემოწმება Sheets-ში
+        // 1. Check allowed users from Google Sheets
         const sheetRes = await axios.get(USERS_SHEET_URL);
         const allowedUsers = sheetRes.data.split('\n').map(r => r.split(',')[0].replace(/"/g, '').trim().toLowerCase());
 
         if (!allowedUsers.includes(usernameLower)) {
-            return res.json({ success: false, message: "წვდომა უარყოფილია: იუზერი ვერ მოიძებნა!" });
+            return res.json({ 
+                success: false, 
+                message: "User not found. Please use your existing Rolletto username!" 
+            });
         }
 
-        // 2. თამაშების წამოღება Sheets-იდან
+        // 2. Fetch game settings from Google Sheets
         const currentSettings = await getDynamicSettings();
 
         let existingUser = await User.findOne({ username: usernameLower });
         if (!existingUser) {
+            // First time login - register
             existingUser = new User({ username: usernameLower, password: password });
             await existingUser.save();
         } else if (existingUser.password !== password) {
-            return res.json({ success: false, message: "არასწორი პაროლი!" });
+            // Check password for existing users
+            return res.json({ success: false, message: "Incorrect password!" });
         }
 
         const rank = await User.countDocuments({ totalScore: { $gt: existingUser.totalScore } }) + 1;
@@ -85,29 +90,41 @@ app.post('/api/check-user', async (req, res) => {
             userScore: existingUser.totalScore, 
             userRank: rank 
         });
-    } catch (e) { res.status(500).json({ success: false }); }
+    } catch (e) { 
+        res.status(500).json({ success: false, message: "Server sync error" }); 
+    }
 });
 
 // =========================================================
 // 💾 SAVE & LEADERBOARD
 // =========================================================
 app.post('/api/save-prediction', async (req, res) => {
-    const { username, dayId, answers } = req.body;
-    const user = await User.findOne({ username: username.toLowerCase().trim() });
-    if (user) {
-        if (!user.predictions.find(p => p.dayId === dayId)) {
-            user.predictions.push({ dayId, answers, points: 0 });
-            await user.save();
-            return res.json({ success: true });
+    try {
+        const { username, dayId, answers } = req.body;
+        const user = await User.findOne({ username: username.toLowerCase().trim() });
+        if (user) {
+            if (!user.predictions.find(p => p.dayId === dayId)) {
+                user.predictions.push({ dayId, answers, points: 0 });
+                await user.save();
+                return res.json({ success: true });
+            }
+            res.json({ success: false, message: "Prediction already submitted for this day!" });
         }
-        res.json({ success: false, message: "უკვე გაკეთებულია!" });
+    } catch (e) {
+        res.status(500).json({ success: false });
     }
 });
 
 app.get('/api/leaderboard', async (req, res) => {
-    const users = await User.find().sort({ totalScore: -1 }).limit(10);
-    res.json({ topData: users.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore })) });
+    try {
+        const users = await User.find().sort({ totalScore: -1 }).limit(10);
+        res.json({ 
+            topData: users.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore })) 
+        });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server on ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
