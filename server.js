@@ -7,38 +7,78 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// 🔗 ლინკი პირდაპირ კოდში (ყველაზე საიმედო ვარიანტი)
-const MONGO_URI = "mongodb://nikagurgenidze96:i5IHVZwDyQAszsEr@ac-p2pvdqf-shard-00-00.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-01.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-02.p9v8t.mongodb.net:27017/worldcup?ssl=true&replicaSet=atlas-13pivk-shard-0&authSource=admin&retryWrites=true&w=majority";
+// =========================================================
+// 🔗 სწორი მონაცემები (Username: crmnikagurg23_db_user)
+// =========================================================
+const MONGO_URI = "mongodb://crmnikagurg23_db_user:i5IHVZwDyQAszsEr@ac-p2pvdqf-shard-00-00.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-01.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-02.p9v8t.mongodb.net:27017/worldcup?ssl=true&replicaSet=atlas-13pivk-shard-0&authSource=admin&retryWrites=true&w=majority";
 
 const SHEET_ID = "1rVe2OxD7wX6UR2h8xp1AmBEQ6Lx1J6S2J1qOizZK96s";
+const GAMES_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Games`;
 const USERS_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1`;
 
-// ბაზასთან კავშირის მცდელობა
 mongoose.connect(MONGO_URI, { 
     useNewUrlParser: true, 
     useUnifiedTopology: true,
     serverSelectionTimeoutMS: 5000 
 })
-.then(() => console.log("✅ DB CONNECTED"))
-.catch(err => console.error("❌ DB ERROR:", err.message));
+.then(() => console.log("✅✅✅ DATABASE CONNECTED!"))
+.catch(err => console.log("❌❌❌ DB ERROR:", err.message));
 
-// მარტივი ენდპოინტი შესამოწმებლად
-app.get('/api/status', (req, res) => {
-    res.json({ 
-        status: "Online", 
-        database: mongoose.connection.readyState === 1 ? "Connected" : "Disconnected" 
-    });
+const userSchema = new mongoose.Schema({
+    username: { type: String, unique: true, lowercase: true, trim: true },
+    password: { type: String },
+    totalScore: { type: Number, default: 0 },
+    predictions: [{ dayId: String, answers: Object }]
 });
+const User = mongoose.model('User', userSchema);
 
 app.get('/api/leaderboard', async (req, res) => {
     try {
-        // თუ ბაზა არაა ჩართული, ცარიელი სია დააბრუნოს (რომ 502 არ ამოაგდოს)
         if (mongoose.connection.readyState !== 1) return res.json({ topData: [], info: "DB offline" });
-        const User = mongoose.model('User', new mongoose.Schema({ username: String, totalScore: Number }));
         const top = await User.find().sort({ totalScore: -1 }).limit(10);
         res.json({ topData: top.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore })) });
     } catch (e) { res.json({ topData: [] }); }
 });
 
+app.post('/api/check-user', async (req, res) => {
+    try {
+        const { user, password } = req.body;
+        const uName = user.toLowerCase().trim();
+        const sheetRes = await axios.get(USERS_URL);
+        const allowed = sheetRes.data.split('\n').map(r => r.split(',')[0].replace(/"/g, '').trim().toLowerCase());
+        
+        if (!allowed.includes(uName)) return res.json({ success: false, message: "User not in list" });
+        
+        let u = await User.findOne({ username: uName });
+        if (!u) { u = new User({ username: uName, password }); await u.save(); }
+        else if (u.password !== password) return res.json({ success: false, message: "Wrong password" });
+        
+        const gRes = await axios.get(GAMES_URL);
+        const rows = gRes.data.split('\n').slice(1);
+        const allDays = {};
+        rows.forEach(r => {
+            const c = r.split(',').map(v => v.replace(/"/g, '').trim());
+            if(c[0]) allDays[c[0]] = { title: c[1], date: c[2], matches: c[3]?.split('|') || [], results: c[4]?.split('|') || null, sport: c[5] || "Football", pointsPerGame: parseInt(c[6]) || 1 };
+        });
+
+        const allUsers = await User.find().sort({ totalScore: -1 });
+        const rank = allUsers.findIndex(curr => curr.username === u.username) + 1;
+        res.json({ success: true, userScore: u.totalScore, userRank: rank, userPredictions: u.predictions, allDays });
+    } catch (e) { res.status(500).json({ success: false }); }
+});
+
+app.post('/api/save-prediction', async (req, res) => {
+    try {
+        const { username, dayId, answers } = req.body;
+        const u = await User.findOne({ username: username.toLowerCase().trim() });
+        if(u && !u.predictions.find(p => p.dayId === dayId)) {
+            u.predictions.push({ dayId, answers });
+            await u.save();
+            return res.json({ success: true });
+        }
+        res.json({ success: false });
+    } catch (e) { res.json({ success: false }); }
+});
+
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Server listening on ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on ${PORT}`));
