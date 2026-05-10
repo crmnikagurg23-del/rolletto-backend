@@ -8,16 +8,16 @@ app.use(express.json());
 app.use(cors());
 
 // =========================================================
-// 🔗 CONFIGURATION (STABLE URI)
+// 🔗 CONFIGURATION (STANDARD CONNECTION STRING - FIXES ENOTFOUND)
 // =========================================================
-const MONGO_URI = "mongodb+srv://nikagurgenidze96:nika1996@cluster0.p9v8t.mongodb.net/worldcup?retryWrites=true&w=majority&appName=Cluster0"; 
+const MONGO_URI = "mongodb://nikagurgenidze96:nika1996@ac-p2pvdqf-shard-00-00.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-01.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-02.p9v8t.mongodb.net:27017/worldcup?ssl=true&replicaSet=atlas-13pivk-shard-0&authSource=admin&retryWrites=true&w=majority"; 
 const SHEET_ID = "1rVe2OxD7wX6UR2h8xp1AmBEQ6Lx1J6S2J1qOizZK96s"; 
 
 const GAMES_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Games`;
 const USERS_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1`;
 
 mongoose.connect(MONGO_URI)
-    .then(() => console.log("✅ Database Ready"))
+    .then(() => console.log("✅ Database Ready - Connected via Standard String"))
     .catch(err => console.log("❌ DB Connection Error:", err));
 
 const userSchema = new mongoose.Schema({
@@ -96,7 +96,7 @@ app.get('/api/leaderboard', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
-// 🔄 RECALCULATE (Excel-ში ქულის შეცვლის შემდეგ გამოსაყენებლად)
+// 🔄 RECALCULATE
 app.get('/api/recalculate-all', async (req, res) => {
     try {
         const settings = await getDynamicSettings();
@@ -113,7 +113,7 @@ app.get('/api/recalculate-all', async (req, res) => {
             user.totalScore = total;
             await user.save();
         }
-        res.json({ success: true, message: "Scores updated with dynamic weighting!" });
+        res.json({ success: true, message: "Scores updated!" });
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
