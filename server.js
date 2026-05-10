@@ -1,87 +1,113 @@
 const express = require('express');
-const cors = require('cors');
 const mongoose = require('mongoose');
+const cors = require('cors');
+const axios = require('axios');
+
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 // =========================================================
-// 📢 ADMIN PANEL - თარიღები ჩაწერე YYYY-MM-DD ფორმატში
+// 🔗 CONFIGURATION
 // =========================================================
-const SETTINGS = {
-    "day1": {
-        date: "2026-05-08", // დღევანდელი
-        title: "May 8",
-        matches: ["Brazil vs Croatia", "France vs Poland","France vs Poland","France vs Poland","France vs Poland","France vs Poland"],
-        results: ["", "","","","","","","","","","","",]
-    },
-    "day2": {
-        date: "2026-05-09", // მომავალი
-        title: "May 9",
-        matches: ["Argentina vs Mexico", "Spain vs Germany"],
-        results: ["", ""]
-    }
-};
+const MONGO_URI = process.env.MONGO_URI; 
+const SHEET_ID = "1rVe2OxD7wX6UR2h8xp1AmBEQ6Lx1J6S2J1qOizZK96s";
 
-mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected'));
+// ლინკები სხვადასხვა ტაბისთვის
+const USERS_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1`;
+const GAMES_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Games`;
+
+mongoose.connect(MONGO_URI).then(() => console.log("✅ Database Ready"));
 
 const User = mongoose.model('User', new mongoose.Schema({
-    username: { type: String, unique: true, required: true },
-    password: { type: String, required: true },
+    username: { type: String, lowercase: true, trim: true },
+    password: String,
     totalScore: { type: Number, default: 0 },
-    predictions: [{ dayId: String, answers: Object }]
+    predictions: [{ dayId: String, answers: Object, points: Number }]
 }));
 
+// =========================================================
+// 🔄 DYNAMIC SETTINGS LOADER (Google Sheets-იდან)
+// =========================================================
+async function getDynamicSettings() {
+    try {
+        const res = await axios.get(GAMES_SHEET_URL);
+        const rows = res.data.split('\n').slice(1); // გამოვტოვოთ ჰედერი
+        const settings = {};
+
+        rows.forEach(row => {
+            const cols = row.split(',').map(c => c.replace(/"/g, '').trim());
+            if (cols[0]) { // თუ dayId არსებობს
+                settings[cols[0]] = {
+                    title: cols[1],
+                    date: cols[2],
+                    matches: cols[3] ? cols[3].split('|') : [], // თამაშები გაყავი სიმბოლოთი |
+                    results: cols[4] ? cols[4].split('|') : null // შედეგები გაყავი სიმბოლოთი |
+                };
+            }
+        });
+        return settings;
+    } catch (e) { return {}; }
+}
+
+// =========================================================
+// 🔐 AUTH & USERS SYNC
+// =========================================================
 app.post('/api/check-user', async (req, res) => {
     try {
         const { user, password } = req.body;
-        let existingUser = await User.findOne({ username: user });
+        const usernameLower = user.toLowerCase().trim();
+
+        // 1. იუზერების შემოწმება Sheets-ში
+        const sheetRes = await axios.get(USERS_SHEET_URL);
+        const allowedUsers = sheetRes.data.split('\n').map(r => r.split(',')[0].replace(/"/g, '').trim().toLowerCase());
+
+        if (!allowedUsers.includes(usernameLower)) {
+            return res.json({ success: false, message: "წვდომა უარყოფილია: იუზერი ვერ მოიძებნა!" });
+        }
+
+        // 2. თამაშების წამოღება Sheets-იდან
+        const currentSettings = await getDynamicSettings();
+
+        let existingUser = await User.findOne({ username: usernameLower });
         if (!existingUser) {
-            existingUser = new User({ username: user, password: password });
+            existingUser = new User({ username: usernameLower, password: password });
             await existingUser.save();
         } else if (existingUser.password !== password) {
-            return res.json({ success: false, message: "Incorrect password!" });
+            return res.json({ success: false, message: "არასწორი პაროლი!" });
         }
+
         const rank = await User.countDocuments({ totalScore: { $gt: existingUser.totalScore } }) + 1;
-        res.json({ success: true, allDays: SETTINGS, userPredictions: existingUser.predictions, userScore: existingUser.totalScore, userRank: rank });
+        res.json({ 
+            success: true, 
+            allDays: currentSettings, 
+            userPredictions: existingUser.predictions, 
+            userScore: existingUser.totalScore, 
+            userRank: rank 
+        });
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
+// =========================================================
+// 💾 SAVE & LEADERBOARD
+// =========================================================
 app.post('/api/save-prediction', async (req, res) => {
-    try {
-        const { username, dayId, answers } = req.body;
-        const now = new Date().toISOString().split('T')[0];
-        if (SETTINGS[dayId].date > now) return res.json({ success: false, message: "Too early!" });
-        const user = await User.findOne({ username });
-        if (user.predictions.some(p => p.dayId === dayId)) return res.json({ success: false, message: "Already submitted!" });
-        user.predictions.push({ dayId, answers });
-        await user.save();
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ success: false }); }
-});
-
-app.get('/api/calculate-scores', async (req, res) => {
-    try {
-        const users = await User.find();
-        for (let user of users) {
-            let score = 0;
-            user.predictions.forEach(p => {
-                const dayData = SETTINGS[p.dayId];
-                if (dayData) {
-                    dayData.results.forEach((r, i) => { if (r && p.answers[i] === r) score++; });
-                }
-            });
-            user.totalScore = score;
+    const { username, dayId, answers } = req.body;
+    const user = await User.findOne({ username: username.toLowerCase().trim() });
+    if (user) {
+        if (!user.predictions.find(p => p.dayId === dayId)) {
+            user.predictions.push({ dayId, answers, points: 0 });
             await user.save();
+            return res.json({ success: true });
         }
-        res.json({ success: true, message: "Scores recalculated!" });
-    } catch (e) { res.status(500).json({ success: false }); }
+        res.json({ success: false, message: "უკვე გაკეთებულია!" });
+    }
 });
 
 app.get('/api/leaderboard', async (req, res) => {
-    const top = await User.find().sort({ totalScore: -1 }).limit(10).lean();
-    res.json({ topData: top.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore })) });
+    const users = await User.find().sort({ totalScore: -1 }).limit(10);
+    res.json({ topData: users.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore })) });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Server on ${PORT}`));
