@@ -8,63 +8,68 @@ app.use(express.json());
 app.use(cors());
 
 // =========================================================
-// 🔗 AUTOMATED CONFIG WITH FALLBACK
+// 🔗 SIMPLEST CONNECTION STRING
 // =========================================================
 const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://nikagurgenidze96:i5IHVZwDyQAszsEr@cluster0.p9v8t.mongodb.net/worldcup?retryWrites=true&w=majority";
+
+mongoose.connect(MONGO_URI)
+    .then(() => console.log("✅✅✅ DATABASE CONNECTED!"))
+    .catch(err => console.log("❌❌❌ STILL NO CONNECTION:", err.message));
 
 const SHEET_ID = "1rVe2OxD7wX6UR2h8xp1AmBEQ6Lx1J6S2J1qOizZK96s";
 const GAMES_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Games`;
 const USERS_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1`;
 
-mongoose.set('strictQuery', false);
-
-async function connectDB() {
-    try {
-        await mongoose.connect(MONGO_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 30000 // ვაცალოთ 30 წამი
-        });
-        console.log("✅✅✅ DATABASE CONNECTED SUCCESSFULLY!");
-    } catch (err) {
-        console.error("❌❌❌ DB CONNECTION FAILED!");
-        console.error("Reason:", err.message);
-    }
-}
-connectDB();
-
 const userSchema = new mongoose.Schema({
     username: { type: String, unique: true, lowercase: true, trim: true },
     password: { type: String },
     totalScore: { type: Number, default: 0 },
-    lastSubmissionDate: { type: Date, default: Date.now },
     predictions: [{ dayId: String, answers: Object }]
 });
 const User = mongoose.model('User', userSchema);
 
-// ... (დანარჩენი API ფუნქციები: check-user, leaderboard, save-prediction - იგივე რჩება)
-
+// API ენდპოინტები
 app.post('/api/check-user', async (req, res) => {
     try {
         const { user, password } = req.body;
-        const usernameLower = user.toLowerCase().trim();
+        const uName = user.toLowerCase().trim();
         const sheetRes = await axios.get(USERS_URL);
         const allowed = sheetRes.data.split('\n').map(r => r.split(',')[0].replace(/"/g, '').trim().toLowerCase());
-
-        if (!allowed.includes(usernameLower)) return res.json({ success: false, message: "User not found" });
-
-        let u = await User.findOne({ username: usernameLower });
-        if (!u) {
-            u = new User({ username: usernameLower, password: password });
-            await u.save();
-        } else if (u.password !== password) return res.json({ success: false, message: "Wrong password" });
-
-        const gamesRes = await axios.get(GAMES_URL);
-        const allDays = {}; // აქ მონაცემების დამუშავება ხდება
+        if (!allowed.includes(uName)) return res.json({ success: false, message: "User not in list" });
         
-        res.json({ success: true, userScore: u.totalScore, userPredictions: u.predictions, allDays });
+        let u = await User.findOne({ username: uName });
+        if (!u) { u = new User({ username: uName, password }); await u.save(); }
+        else if (u.password !== password) return res.json({ success: false, message: "Wrong password" });
+        
+        const gRes = await axios.get(GAMES_URL);
+        const rows = gRes.data.split('\n').slice(1);
+        const allDays = {};
+        rows.forEach(r => {
+            const c = r.split(',').map(v => v.replace(/"/g, '').trim());
+            if(c[0]) allDays[c[0]] = { title: c[1], date: c[2], matches: c[3]?.split('|') || [], results: c[4]?.split('|') || null, sport: c[5] || "Football", pointsPerGame: parseInt(c[6]) || 1 };
+        });
+
+        const allUsers = await User.find().sort({ totalScore: -1 });
+        const rank = allUsers.findIndex(curr => curr.username === u.username) + 1;
+        res.json({ success: true, userScore: u.totalScore, userRank: rank, userPredictions: u.predictions, allDays });
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
+app.get('/api/leaderboard', async (req, res) => {
+    const u = await User.find().sort({ totalScore: -1 }).limit(10);
+    res.json({ topData: u.map((x, i) => ({ rank: i + 1, u: x.username, p: x.totalScore })) });
+});
+
+app.post('/api/save-prediction', async (req, res) => {
+    const { username, dayId, answers } = req.body;
+    const u = await User.findOne({ username: username.toLowerCase().trim() });
+    if(u && !u.predictions.find(p => p.dayId === dayId)) {
+        u.predictions.push({ dayId, answers });
+        await u.save();
+        return res.json({ success: true });
+    }
+    res.json({ success: false });
+});
+
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Server on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on ${PORT}`));
