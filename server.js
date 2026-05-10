@@ -8,9 +8,9 @@ app.use(express.json());
 app.use(cors());
 
 // =========================================================
-// 🔗 CONFIGURATION
+// 🔗 CONFIGURATION (STABLE URI)
 // =========================================================
-const MONGO_URI = "mongodb+srv://nikagurgenidze96:nika1996@cluster0.p9v8t.mongodb.net/worldcup?retryWrites=true&w=majority"; 
+const MONGO_URI = "mongodb+srv://nikagurgenidze96:nika1996@cluster0.p9v8t.mongodb.net/worldcup?retryWrites=true&w=majority&appName=Cluster0"; 
 const SHEET_ID = "1rVe2OxD7wX6UR2h8xp1AmBEQ6Lx1J6S2J1qOizZK96s"; 
 
 const GAMES_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Games`;
@@ -78,7 +78,7 @@ app.post('/api/save-prediction', async (req, res) => {
     try {
         const { username, dayId, answers } = req.body;
         const u = await User.findOne({ username: username.toLowerCase().trim() });
-        if (!u || u.predictions.find(p => p.dayId === dayId)) return res.json({ success: false, message: "Error or duplicate!" });
+        if (!u || u.predictions.find(p => p.dayId === dayId)) return res.json({ success: false, message: "Duplicate!" });
         
         const now = new Date();
         u.predictions.push({ dayId, answers, createdAt: now });
@@ -96,6 +96,7 @@ app.get('/api/leaderboard', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
+// 🔄 RECALCULATE (Excel-ში ქულის შეცვლის შემდეგ გამოსაყენებლად)
 app.get('/api/recalculate-all', async (req, res) => {
     try {
         const settings = await getDynamicSettings();
@@ -112,7 +113,7 @@ app.get('/api/recalculate-all', async (req, res) => {
             user.totalScore = total;
             await user.save();
         }
-        res.json({ success: true, message: "Scores updated!" });
+        res.json({ success: true, message: "Scores updated with dynamic weighting!" });
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
