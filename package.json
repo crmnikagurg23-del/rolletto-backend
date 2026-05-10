@@ -1,7 +1,6 @@
 {
-  "name": "rolletto-predictor-backend",
+  "name": "rolletto-backend",
   "version": "1.0.0",
-  "description": "Backend for World Cup Predictor",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
