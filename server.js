@@ -8,23 +8,17 @@ app.use(express.json());
 app.use(cors());
 
 // =========================================================
-// 🔗 განახლებული მონაცემები
+// 🔗 NEW STABLE CONNECTION
 // =========================================================
-const DB_USER = "crmnikagurg23_db_user";
-const DB_PASS = "nika2026rolletto";
-const MONGO_URI = `mongodb://${DB_USER}:${DB_PASS}@ac-p2pvdqf-shard-00-00.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-01.p9v8t.mongodb.net:27017,ac-p2pvdqf-shard-00-02.p9v8t.mongodb.net:27017/worldcup?ssl=true&replicaSet=atlas-13pivk-shard-0&authSource=admin&retryWrites=true&w=majority`;
+const MONGO_URI = "mongodb+srv://nika_final:win2026win@cluster0.lqh75wa.mongodb.net/worldcup?retryWrites=true&w=majority&appName=Cluster0"; 
 
 const SHEET_ID = "1rVe2OxD7wX6UR2h8xp1AmBEQ6Lx1J6S2J1qOizZK96s";
 const USERS_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1`;
 const GAMES_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Games`;
 
-mongoose.connect(MONGO_URI, { 
-    useNewUrlParser: true, 
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 10000 
-})
-.then(() => console.log("✅✅✅ DATABASE CONNECTED!"))
-.catch(err => console.log("❌❌❌ DB CONNECTION ERROR:", err.message));
+mongoose.connect(MONGO_URI)
+    .then(() => console.log("✅✅✅ DATABASE CONNECTED!"))
+    .catch(err => console.log("❌❌❌ CONNECTION ERROR:", err.message));
 
 const userSchema = new mongoose.Schema({
     username: { type: String, unique: true, lowercase: true, trim: true },
@@ -34,12 +28,8 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
-app.get('/api/leaderboard', async (req, res) => {
-    try {
-        if (mongoose.connection.readyState !== 1) return res.json({ topData: [], info: "DB offline" });
-        const top = await User.find().sort({ totalScore: -1 }).limit(10);
-        res.json({ topData: top.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore })) });
-    } catch (e) { res.json({ topData: [] }); }
+app.get('/api/status', (req, res) => {
+    res.json({ server: "online", db: mongoose.connection.readyState === 1 ? "connected" : "disconnected" });
 });
 
 app.post('/api/check-user', async (req, res) => {
@@ -49,11 +39,11 @@ app.post('/api/check-user', async (req, res) => {
         const sheetRes = await axios.get(USERS_URL);
         const allowed = sheetRes.data.split('\n').map(r => r.split(',')[0].replace(/"/g, '').trim().toLowerCase());
         
-        if (!allowed.includes(uName)) return res.json({ success: false, message: "User not in list" });
+        if (!allowed.includes(uName)) return res.json({ success: false, message: "Unauthorized" });
         
         let u = await User.findOne({ username: uName });
         if (!u) { u = new User({ username: uName, password }); await u.save(); }
-        else if (u.password !== password) return res.json({ success: false, message: "Wrong password" });
+        else if (u.password !== password) return res.json({ success: false, message: "Wrong pass" });
         
         const gRes = await axios.get(GAMES_URL);
         const rows = gRes.data.split('\n').slice(1);
@@ -63,10 +53,17 @@ app.post('/api/check-user', async (req, res) => {
             if(c[0]) allDays[c[0]] = { title: c[1], date: c[2], matches: c[3]?.split('|') || [], results: c[4]?.split('|') || null, sport: c[5] || "Football", pointsPerGame: parseInt(c[6]) || 1 };
         });
 
-        const allUsers = await User.find().sort({ totalScore: -1 });
-        const rank = allUsers.findIndex(curr => curr.username === u.username) + 1;
+        const usersSorted = await User.find().sort({ totalScore: -1 });
+        const rank = usersSorted.findIndex(curr => curr.username === u.username) + 1;
         res.json({ success: true, userScore: u.totalScore, userRank: rank, userPredictions: u.predictions, allDays });
     } catch (e) { res.status(500).json({ success: false }); }
+});
+
+app.get('/api/leaderboard', async (req, res) => {
+    try {
+        const top = await User.find().sort({ totalScore: -1 }).limit(10);
+        res.json({ topData: top.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore })) });
+    } catch (e) { res.json({ topData: [] }); }
 });
 
 app.post('/api/save-prediction', async (req, res) => {
@@ -83,4 +80,4 @@ app.post('/api/save-prediction', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Server on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Live on ${PORT}`));
