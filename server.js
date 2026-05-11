@@ -1,77 +1,162 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const axios = require('axios');
-const cors = require('cors');
+<script>
+        const BASE_URL = 'https://rolletto-backend-1.onrender.com/api';
+        let GLOBAL_DATA = {}; let SELECTED_DAY = ""; let TEMP_ANSWERS = {};
 
-const app = express();
-app.use(express.json());
-app.use(cors());
-
-// 🔗 STABLE CONNECTION (Oregon Cluster)
-const MONGO_URI = "mongodb+srv://nika_final:win2026win@cluster0.lqh75wa.mongodb.net/worldcup?retryWrites=true&w=majority&appName=Cluster0"; 
-
-const SHEET_ID = "1rVe2OxD7wX6UR2h8xp1AmBEQ6Lx1J6S2J1qOizZK96s";
-const USERS_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1`;
-const GAMES_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Games`;
-
-mongoose.connect(MONGO_URI)
-    .then(() => console.log("✅ DB CONNECTED"))
-    .catch(err => console.log("❌ DB ERROR:", err.message));
-
-const userSchema = new mongoose.Schema({
-    username: { type: String, unique: true, lowercase: true, trim: true },
-    password: { type: String },
-    totalScore: { type: Number, default: 0 },
-    predictions: [{ dayId: String, answers: Object }]
-});
-const User = mongoose.model('User', userSchema);
-
-app.post('/api/check-user', async (req, res) => {
-    try {
-        const { user, password } = req.body;
-        const uName = user.toLowerCase().trim();
-        const sheetRes = await axios.get(USERS_URL);
-        const allowed = sheetRes.data.split('\n').map(r => r.split(',')[0].replace(/"/g, '').trim().toLowerCase());
-        
-        if (!allowed.includes(uName)) return res.json({ success: false, message: "Username not authorized" });
-        
-        let u = await User.findOne({ username: uName });
-        if (!u) { u = new User({ username: uName, password }); await u.save(); }
-        else if (u.password !== password) return res.json({ success: false, message: "Invalid password" });
-        
-        const gRes = await axios.get(GAMES_URL);
-        const rows = gRes.data.split('\n').slice(1);
-        const allDays = {};
-        rows.forEach(r => {
-            const c = r.split(',').map(v => v.replace(/"/g, '').trim());
-            if(c[0]) allDays[c[0]] = { title: c[1], date: c[2], matches: c[3]?.split('|') || [], results: c[4]?.split('|') || null, sport: c[5] || "Football", pointsPerGame: parseInt(c[6]) || 1 };
-        });
-
-        const allUsers = await User.find().sort({ totalScore: -1 });
-        const rank = allUsers.findIndex(curr => curr.username === u.username) + 1;
-        res.json({ success: true, userScore: u.totalScore, userRank: rank, userPredictions: u.predictions, allDays });
-    } catch (e) { res.status(500).json({ success: false }); }
-});
-
-app.post('/api/save-prediction', async (req, res) => {
-    try {
-        const { username, dayId, answers } = req.body;
-        const u = await User.findOne({ username: username.toLowerCase().trim() });
-        if(u && !u.predictions.find(p => p.dayId === dayId)) {
-            u.predictions.push({ dayId, answers });
-            await u.save();
-            return res.json({ success: true });
+        function showToast(m, isErr = true) { 
+            const t = document.getElementById('toast'); 
+            t.innerText = m; 
+            t.style.background = isErr ? '#ff4d4d' : '#00ffcc'; 
+            t.style.color = isErr ? '#fff' : '#061218'; 
+            t.style.display = 'block'; 
+            setTimeout(() => t.style.display = 'none', 3000); 
         }
-        res.json({ success: false, message: "Already saved or error" });
-    } catch (e) { res.json({ success: false }); }
-});
 
-app.get('/api/leaderboard', async (req, res) => {
-    try {
-        const top = await User.find().sort({ totalScore: -1 }).limit(10);
-        res.json({ topData: top.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore })) });
-    } catch (e) { res.json({ topData: [] }); }
-});
+        // მთავარი ფუნქცია, რომელიც ამოწმებს იუზერს
+        async function startGame(isAuto = false) {
+            const userField = document.getElementById('username').value.trim();
+            const passField = document.getElementById('password').value.trim();
+            
+            const user = isAuto ? localStorage.getItem('wc_user') : userField;
+            const pass = isAuto ? localStorage.getItem('wc_pass') : passField;
 
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Server on ${PORT}`));
+            if(!user || !pass) return;
+
+            if(!isAuto) document.getElementById('btn-loader').style.display = "block";
+            
+            try {
+                const res = await fetch(`${BASE_URL}/check-user`, { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({user, password: pass}) 
+                }).then(r => r.json());
+
+                if(res.success) {
+                    localStorage.setItem('wc_user', user); 
+                    localStorage.setItem('wc_pass', pass);
+                    GLOBAL_DATA = res;
+                    
+                    document.getElementById('my-rank').innerText = `#${res.userRank}`;
+                    document.getElementById('my-score').innerText = res.userScore;
+                    document.getElementById('start-section').style.display = 'none';
+                    document.getElementById('game-section').style.display = 'block';
+                    document.getElementById('my-status').style.display = 'block';
+                    
+                    renderTabs(); 
+                    loadLB();
+                } else { 
+                    if(!isAuto) showToast(res.message); 
+                    else logout(); // თუ ავტომატური შესვლა ჩავარდა, გაასუფთავოს მონაცემები
+                }
+            } catch(e) { 
+                if(!isAuto) showToast("Server Connection Error"); 
+            }
+            document.getElementById('btn-loader').style.display = "none";
+        }
+
+        function renderTabs() {
+            const container = document.getElementById('day-tabs'); 
+            container.innerHTML = "";
+            const now = new Date().toISOString().split('T')[0];
+            const days = Object.keys(GLOBAL_DATA.allDays).sort((a,b) => a-b);
+            const visibleDays = days.filter(id => GLOBAL_DATA.allDays[id].date <= now);
+            
+            visibleDays.forEach(dayId => {
+                const btn = document.createElement('div');
+                btn.className = 'day-tab' + (SELECTED_DAY === dayId ? ' active' : '');
+                btn.innerText = (GLOBAL_DATA.allDays[dayId].date === now) ? "TODAY" : GLOBAL_DATA.allDays[dayId].title;
+                btn.onclick = () => selectDay(dayId);
+                container.appendChild(btn);
+            });
+            if(!SELECTED_DAY && visibleDays.length > 0) selectDay(visibleDays[visibleDays.length-1]);
+        }
+
+        function selectDay(dayId) {
+            SELECTED_DAY = dayId; 
+            renderTabs();
+            const container = document.getElementById('games-container'); 
+            container.innerHTML = "";
+            const dInfo = GLOBAL_DATA.allDays[dayId];
+            const now = new Date().toISOString().split('T')[0];
+            const userPred = GLOBAL_DATA.userPredictions.find(p => p.dayId === dayId);
+            const isPast = dInfo.date < now;
+            TEMP_ANSWERS = {};
+
+            container.innerHTML = `<div style="text-align:center; margin-bottom:10px;"><span style="font-size:10px; color:var(--primary);">${dInfo.date} • ${dInfo.pointsPerGame} PTS</span></div>`;
+            dInfo.matches.forEach((game, i) => {
+                const teams = game.split(' vs '); 
+                let opts = "";
+                ['1', 'X', '2'].forEach(opt => {
+                    let cls = "opt-btn";
+                    if (userPred && userPred.answers[i] === opt) cls += " selected";
+                    else if (TEMP_ANSWERS[i] === opt) cls += " selected";
+                    opts += `<button class="${cls}" ${(userPred || isPast) ? 'disabled' : `onclick="pick(this, ${i}, '${opt}')"`}>${opt}</button>`;
+                });
+                container.innerHTML += `<div class="game-card"><div class="match-display"><div class="team-name">${teams[0]}</div><div class="vs-divider">VS</div><div class="team-name">${teams[1]}</div></div><div class="options-grid">${opts}</div></div>`;
+            });
+            document.getElementById('save-btn').style.display = (!userPred && !isPast) ? 'block' : 'none';
+        }
+
+        function pick(btn, idx, val) { 
+            btn.parentElement.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected'); 
+            TEMP_ANSWERS[idx] = val; 
+        }
+
+        async function saveCurrentDay() {
+            if(Object.keys(TEMP_ANSWERS).length < GLOBAL_DATA.allDays[SELECTED_DAY].matches.length) return showToast("Pick all matches!");
+            document.getElementById('save-loader').style.display = "block";
+            try {
+                const res = await fetch(`${BASE_URL}/save-prediction`, { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({username: localStorage.getItem('wc_user'), dayId: SELECTED_DAY, answers: TEMP_ANSWERS}) 
+                }).then(r => r.json());
+                
+                if(res.success) { 
+                    showToast("Saved!", false); 
+                    GLOBAL_DATA.userPredictions.push({dayId: SELECTED_DAY, answers: {...TEMP_ANSWERS}}); 
+                    selectDay(SELECTED_DAY); 
+                }
+            } catch(e) { showToast("Error"); }
+            document.getElementById('save-loader').style.display = "none";
+        }
+
+        async function loadLB() {
+            try {
+                const res = await fetch(`${BASE_URL}/leaderboard`).then(r => r.json());
+                const container = document.getElementById('lb-data');
+                const cUser = (localStorage.getItem('wc_user') || "").toLowerCase().trim();
+                
+                container.innerHTML = res.topData.map(u => {
+                    const isMe = u.u.toLowerCase().trim() === cUser;
+                    let displayUsername = u.u;
+                    if (!isMe && u.u.length > 2) {
+                        displayUsername = u.u[0] + "***" + u.u[u.u.length - 1];
+                    } else if (!isMe) {
+                        displayUsername = u.u[0] + "*";
+                    }
+
+                    return `<tr class="lb-row ${isMe ? 'my-row-highlight' : ''}">
+                        <td>${u.rank}</td>
+                        <td style="text-align:left; padding-left:15px;">${displayUsername}</td>
+                        <td style="color:var(--accent-gold); font-weight:700;">${u.p}</td>
+                        <td>${{1:"1000€",2:"500€",3:"200€"}[u.rank] || "-"}</td>
+                    </tr>`;
+                }).join('');
+            } catch(e) {}
+        }
+
+        function logout() { 
+            localStorage.clear(); 
+            location.reload(); 
+        }
+
+        // რეფრეშის დროს ავტომატური შემოწმება
+        window.onload = () => { 
+            if(localStorage.getItem('wc_user')) {
+                startGame(true); // true ნიშნავს ავტომატურ რეჟიმს
+            } else {
+                loadLB(); 
+            }
+        };
+    </script>
