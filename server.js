@@ -7,7 +7,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// 🔗 Stable Connection String
+// 🔗 STABLE CONNECTION (Oregon Cluster)
 const MONGO_URI = "mongodb+srv://nika_final:win2026win@cluster0.lqh75wa.mongodb.net/worldcup?retryWrites=true&w=majority&appName=Cluster0"; 
 
 const SHEET_ID = "1rVe2OxD7wX6UR2h8xp1AmBEQ6Lx1J6S2J1qOizZK96s";
@@ -15,8 +15,8 @@ const USERS_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tq
 const GAMES_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Games`;
 
 mongoose.connect(MONGO_URI)
-    .then(() => console.log("✅ DB Connected"))
-    .catch(err => console.log("❌ DB Error:", err.message));
+    .then(() => console.log("✅ DB CONNECTED"))
+    .catch(err => console.log("❌ DB ERROR:", err.message));
 
 const userSchema = new mongoose.Schema({
     username: { type: String, unique: true, lowercase: true, trim: true },
@@ -33,7 +33,7 @@ app.post('/api/check-user', async (req, res) => {
         const sheetRes = await axios.get(USERS_URL);
         const allowed = sheetRes.data.split('\n').map(r => r.split(',')[0].replace(/"/g, '').trim().toLowerCase());
         
-        if (!allowed.includes(uName)) return res.json({ success: false, message: "User not authorized" });
+        if (!allowed.includes(uName)) return res.json({ success: false, message: "Username not authorized" });
         
         let u = await User.findOne({ username: uName });
         if (!u) { u = new User({ username: uName, password }); await u.save(); }
@@ -62,7 +62,7 @@ app.post('/api/save-prediction', async (req, res) => {
             await u.save();
             return res.json({ success: true });
         }
-        res.json({ success: false });
+        res.json({ success: false, message: "Already saved or error" });
     } catch (e) { res.json({ success: false }); }
 });
 
@@ -74,4 +74,4 @@ app.get('/api/leaderboard', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server on ${PORT}`));
