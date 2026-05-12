@@ -58,7 +58,7 @@ app.post('/api/login', async (req, res) => {
         res.json({ 
             success: true, 
             userScore: u.totalScore || 0, 
-            userRank: rankIndex === -1 ? 10 : rankIndex + 1, 
+            userRank: rankIndex === -1 ? allUsers.length + 1 : rankIndex + 1, 
             userPredictions: u.predictions || [], 
             allDays 
         });
