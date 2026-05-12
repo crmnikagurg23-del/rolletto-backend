@@ -58,7 +58,7 @@ app.post('/api/login', async (req, res) => {
         res.json({ 
             success: true, 
             userScore: u.totalScore || 0, 
-            userRank: rankIndex === -1 ? "N/A" : rankIndex + 1, 
+            userRank: rankIndex === -1 ? 10 : rankIndex + 1, 
             userPredictions: u.predictions || [], 
             allDays 
         });
@@ -107,7 +107,7 @@ app.get('/api/admin/calculate-scores', async (req, res) => {
             user.totalScore = score;
             await user.save();
         }
-        res.send("✅ Calculated");
+        res.send("✅ Scores calculated!");
     } catch (e) { res.send("❌ Error"); }
 });
 
