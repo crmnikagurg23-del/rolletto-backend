@@ -22,13 +22,27 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
+app.post('/api/signup', async (req, res) => {
+    try {
+        const { user, password } = req.body;
+        const uName = user.toLowerCase().trim();
+        const existing = await User.findOne({ username: uName });
+        if (existing) return res.json({ success: false, message: "Account already exists!" });
+        const sheetRes = await axios.get(USERS_URL);
+        const allowed = sheetRes.data.split('\n').map(r => r.split(',')[0].replace(/"/g, '').trim().toLowerCase());
+        if (!allowed.includes(uName)) return res.json({ success: false, message: "Username not in whitelist!" });
+        const newUser = new User({ username: uName, password });
+        await newUser.save();
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ success: false }); }
+});
+
 app.post('/api/login', async (req, res) => {
     try {
         const { user, password } = req.body;
         const uName = user.toLowerCase().trim();
         const u = await User.findOne({ username: uName });
         if (!u || u.password !== password) return res.json({ success: false, message: "Invalid credentials!" });
-        
         const gRes = await axios.get(GAMES_URL);
         const rows = gRes.data.split('\n').slice(1);
         const allDays = {};
@@ -36,10 +50,8 @@ app.post('/api/login', async (req, res) => {
             const c = r.split(',').map(v => v.replace(/"/g, '').trim());
             if(c[0]) allDays[c[0]] = { title: c[1], date: c[2], matches: c[3]?.split('|') || [], results: c[4]?.split('|') || null, pointsPerGame: parseInt(c[6]) || 1 };
         });
-
         const allUsers = await User.find().sort({ totalScore: -1, "predictions.timestamp": 1 });
         const rankIndex = allUsers.findIndex(curr => curr.username === uName);
-        
         res.json({ 
             success: true, 
             userScore: u.totalScore || 0, 
@@ -47,22 +59,6 @@ app.post('/api/login', async (req, res) => {
             userPredictions: u.predictions || [], 
             allDays 
         });
-    } catch (e) { res.status(500).json({ success: false }); }
-});
-
-// სხვა ენდპოინტები (signup, save-prediction, leaderboard, calculate-scores) უცვლელია...
-app.post('/api/signup', async (req, res) => {
-    try {
-        const { user, password } = req.body;
-        const uName = user.toLowerCase().trim();
-        const existing = await User.findOne({ username: uName });
-        if (existing) return res.json({ success: false, message: "Account exists!" });
-        const sheetRes = await axios.get(USERS_URL);
-        const allowed = sheetRes.data.split('\n').map(r => r.split(',')[0].replace(/"/g, '').trim().toLowerCase());
-        if (!allowed.includes(uName)) return res.json({ success: false, message: "Not in whitelist!" });
-        const newUser = new User({ username: uName, password });
-        await newUser.save();
-        res.json({ success: true });
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
@@ -101,14 +97,14 @@ app.get('/api/admin/calculate-scores', async (req, res) => {
                 const dayRes = resultsMap[pred.dayId];
                 if (dayRes) {
                     dayRes.results.forEach((res, i) => {
-                        if (res && pred.answers[i] === res) score += dayRes.points;
+                        if (res && res !== "" && pred.answers[i] === res) score += dayRes.points;
                     });
                 }
             });
             user.totalScore = score;
             await user.save();
         }
-        res.send("✅ Scores calculated!");
+        res.send("✅ Calculated");
     } catch (e) { res.send("❌ Error"); }
 });
 
