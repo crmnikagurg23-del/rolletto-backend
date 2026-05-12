@@ -22,21 +22,6 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
-app.post('/api/signup', async (req, res) => {
-    try {
-        const { user, password } = req.body;
-        const uName = user.toLowerCase().trim();
-        const existing = await User.findOne({ username: uName });
-        if (existing) return res.json({ success: false, message: "Account exists!" });
-        const sheetRes = await axios.get(USERS_URL);
-        const allowed = sheetRes.data.split('\n').map(r => r.split(',')[0].replace(/"/g, '').trim().toLowerCase());
-        if (!allowed.includes(uName)) return res.json({ success: false, message: "Not in whitelist!" });
-        const newUser = new User({ username: uName, password });
-        await newUser.save();
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ success: false }); }
-});
-
 app.post('/api/login', async (req, res) => {
     try {
         const { user, password } = req.body;
@@ -62,6 +47,22 @@ app.post('/api/login', async (req, res) => {
             userPredictions: u.predictions || [], 
             allDays 
         });
+    } catch (e) { res.status(500).json({ success: false }); }
+});
+
+// სხვა ენდპოინტები (signup, save-prediction, leaderboard, calculate-scores) უცვლელია...
+app.post('/api/signup', async (req, res) => {
+    try {
+        const { user, password } = req.body;
+        const uName = user.toLowerCase().trim();
+        const existing = await User.findOne({ username: uName });
+        if (existing) return res.json({ success: false, message: "Account exists!" });
+        const sheetRes = await axios.get(USERS_URL);
+        const allowed = sheetRes.data.split('\n').map(r => r.split(',')[0].replace(/"/g, '').trim().toLowerCase());
+        if (!allowed.includes(uName)) return res.json({ success: false, message: "Not in whitelist!" });
+        const newUser = new User({ username: uName, password });
+        await newUser.save();
+        res.json({ success: true });
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
