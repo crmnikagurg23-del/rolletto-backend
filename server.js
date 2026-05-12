@@ -7,12 +7,13 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// 🔗 მონაცემთა ბაზა და Google Sheets ლინკები
 const MONGO_URI = "mongodb+srv://nika_final:win2026win@cluster0.lqh75wa.mongodb.net/worldcup?retryWrites=true&w=majority&appName=Cluster0"; 
 const SHEET_ID = "1rVe2OxD7wX6UR2h8xp1AmBEQ6Lx1J6S2J1qOizZK96s";
 const USERS_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1`;
 const GAMES_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Games`;
 
-mongoose.connect(MONGO_URI).then(() => console.log("✅ DB Connected (Sheets Mode)"));
+mongoose.connect(MONGO_URI).then(() => console.log("✅ DB Connected (Stable Version)"));
 
 const userSchema = new mongoose.Schema({
     username: { type: String, unique: true, lowercase: true, trim: true },
@@ -22,55 +23,71 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
+// --- 1. SIGN UP (შიდა რეგისტრაცია Rolletto-ს იუზერებისთვის) ---
 app.post('/api/signup', async (req, res) => {
     try {
         const { user, password } = req.body;
         const uName = user.toLowerCase().trim();
         const existing = await User.findOne({ username: uName });
-        if (existing) return res.json({ success: false, message: "Account already exists!" });
+        if (existing) return res.json({ success: false, message: "Account already exists! Please Login." });
+
         const sheetRes = await axios.get(USERS_URL);
         const allowed = sheetRes.data.split('\n').map(r => r.split(',')[0].replace(/"/g, '').trim().toLowerCase());
-        if (!allowed.includes(uName)) return res.json({ success: false, message: "Username not in Rolletto list!" });
+        if (!allowed.includes(uName)) return res.json({ success: false, message: "Username not in Rolletto whitelist!" });
+
         const newUser = new User({ username: uName, password });
         await newUser.save();
         res.json({ success: true });
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
+// --- 2. LOGIN (ავტორიზაცია) ---
 app.post('/api/login', async (req, res) => {
     try {
         const { user, password } = req.body;
         const uName = user.toLowerCase().trim();
         const u = await User.findOne({ username: uName });
         if (!u || u.password !== password) return res.json({ success: false, message: "Invalid credentials!" });
+
         const gRes = await axios.get(GAMES_URL);
         const rows = gRes.data.split('\n').slice(1);
         const allDays = {};
         rows.forEach(r => {
             const c = r.split(',').map(v => v.replace(/"/g, '').trim());
-            if(c[0]) allDays[c[0]] = { title: c[1], date: c[2], matches: c[3]?.split('|') || [], results: c[4]?.split('|') || null, pointsPerGame: parseInt(c[6]) || 1 };
+            if(c[0]) allDays[c[0]] = { 
+                title: c[1], 
+                date: c[2], 
+                matches: c[3]?.split('|') || [], 
+                results: c[4]?.split('|') || null, 
+                pointsPerGame: parseInt(c[6]) || 1 
+            };
         });
+
         const allUsers = await User.find().sort({ totalScore: -1 });
         const rank = allUsers.findIndex(curr => curr.username === u.username) + 1;
         res.json({ success: true, userScore: u.totalScore, userRank: rank, userPredictions: u.predictions, allDays });
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
+// --- 3. SAVE PREDICTION (პროგნოზის შენახვა) ---
 app.post('/api/save-prediction', async (req, res) => {
     const { username, dayId, answers } = req.body;
     const u = await User.findOne({ username: username.toLowerCase().trim() });
     if(u && !u.predictions.find(p => p.dayId === dayId)) {
-        u.predictions.push({ dayId, answers });
+        u.predictions.push({ dayId, answers, timestamp: new Date() });
         await u.save();
         res.json({ success: true });
-    } else res.json({ success: false });
+    } else res.json({ success: false, message: "Prediction already locked!" });
 });
 
+// --- 4. LEADERBOARD (ტოპ 10 იუზერი) ---
 app.get('/api/leaderboard', async (req, res) => {
+    // ქულების თანაბრობისას ითვალისწინებს დროს (ვინც ადრე დადო)
     const top = await User.find().sort({ totalScore: -1, "predictions.timestamp": 1 }).limit(10);
     res.json({ topData: top.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore })) });
 });
 
+// --- 5. ADMIN: CALCULATE SCORES (ქულების განახლების ლინკი) ---
 app.get('/api/admin/calculate-scores', async (req, res) => {
     try {
         const gRes = await axios.get(GAMES_URL);
@@ -89,15 +106,15 @@ app.get('/api/admin/calculate-scores', async (req, res) => {
                 const dayResult = resultsMap[pred.dayId];
                 if (dayResult) {
                     dayResult.results.forEach((realRes, index) => {
-                        if (realRes && realRes.trim() !== "" && pred.answers[index] === realRes.trim()) totalScore += dayResult.points;
+                        if (realRes && realRes !== "" && pred.answers[index] === realRes) totalScore += dayResult.points;
                     });
                 }
             });
             user.totalScore = totalScore;
             await user.save();
         }
-        res.send("✅ Scores updated successfully!");
-    } catch (e) { res.status(500).send("❌ Error: " + e.message); }
+        res.send("✅ Leaderboard updated successfully!");
+    } catch (e) { res.status(500).send("❌ Calculation error."); }
 });
 
 app.listen(process.env.PORT || 10000);
