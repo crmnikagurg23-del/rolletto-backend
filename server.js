@@ -85,7 +85,7 @@ app.get('/api/admin/calculate-scores', async (req, res) => {
         rows.forEach(r => {
             const c = r.split(',').map(v => v.replace(/"/g, '').trim());
             if(c[0] && c[4] && c[4].trim() !== "") {
-                resultsMap[c[0]] = { results: c[4].split('|').map(res => res.trim().toUpperCase()), points: parseInt(c[6]) || 1 };
+                resultsMap[c[0]] = { results: c[4].split('|').map(res => res.trim().toLowerCase()), points: parseInt(c[6]) || 1 };
             }
         });
         const users = await User.find();
@@ -95,7 +95,9 @@ app.get('/api/admin/calculate-scores', async (req, res) => {
                 const dayRes = resultsMap[pred.dayId];
                 if (dayRes) {
                     dayRes.results.forEach((res, i) => {
-                        if (res && ["1", "X", "2"].includes(res) && pred.answers[i] === res) score += dayRes.points;
+                        if (res && ["1", "x", "2"].includes(res) && pred.answers[i] && pred.answers[i].toString().toLowerCase().trim() === res) {
+                            score += dayRes.points;
+                        }
                     });
                 }
             });
