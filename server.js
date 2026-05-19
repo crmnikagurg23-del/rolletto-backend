@@ -48,7 +48,7 @@ app.post('/api/login', async (req, res) => {
         const allDays = {};
         rows.forEach(r => {
             const c = r.split(',').map(v => v.replace(/"/g, '').trim());
-            if(c[0]) allDays[c[0]] = { title: c[1], date: c[2], matches: c[3]?.split('|') || [], results: c[4]?.split('|') || null, pointsPerGame: parseInt(c[6]) || 1 };
+            if(c[0]) allDays[c[0]] = { title: c[1], date: c[2], matches: c[3]?.split('|') || [], results: c[4] || null, pointsPerGame: parseInt(c[6]) || 1 };
         });
         const allUsers = await User.find().sort({ totalScore: -1, "predictions.timestamp": 1 });
         const rankIndex = allUsers.findIndex(curr => curr.username === uName);
@@ -77,17 +77,23 @@ app.get('/api/leaderboard', async (req, res) => {
     res.json({ topData: top.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore || 0 })) });
 });
 
+// 🛠️ ახალი ფუნქცია ქულების თავიდან გადასათვლელად
 app.get('/api/admin/calculate-scores', async (req, res) => {
     try {
         const gRes = await axios.get(GAMES_URL);
         const rows = gRes.data.split('\n').slice(1);
         const resultsMap = {};
+        
         rows.forEach(r => {
             const c = r.split(',').map(v => v.replace(/"/g, '').trim());
             if(c[0] && c[4] && c[4].trim() !== "") {
-                resultsMap[c[0]] = { results: c[4].split('|').map(res => res.trim().toLowerCase()), points: parseInt(c[6]) || 1 };
+                resultsMap[c[0]] = { 
+                    results: c[4].split('|').map(res => res.trim().toLowerCase()), 
+                    points: parseInt(c[6]) || 1 
+                };
             }
         });
+        
         const users = await User.find();
         for (let user of users) {
             let score = 0;
@@ -95,8 +101,9 @@ app.get('/api/admin/calculate-scores', async (req, res) => {
                 const dayRes = resultsMap[pred.dayId];
                 if (dayRes) {
                     dayRes.results.forEach((res, i) => {
-                        if (res && ["1", "x", "2"].includes(res) && pred.answers[i] && pred.answers[i].toString().toLowerCase().trim() === res) {
-                            score += dayRes.points;
+                        if (res && ["1", "x", "2"].includes(res) && pred.answers[i]) {
+                            const userAns = pred.answers[i].toString().toLowerCase().trim();
+                            if (userAns === res) score += dayRes.points;
                         }
                     });
                 }
@@ -106,6 +113,16 @@ app.get('/api/admin/calculate-scores', async (req, res) => {
         }
         res.send("✅ Scores updated successfully!");
     } catch (e) { res.status(500).send("❌ Calculation error"); }
+});
+
+// 🎯 🛠️ სრული რესეტის ფუნქცია (შლის ყველა იუზერს და ასუფთავებს ლიდერბორდს)
+app.get('/api/admin/reset-all', async (req, res) => {
+    try {
+        await User.deleteMany({}); // ბაზიდან შლის აბსოლუტურად ყველა ჩანაწერს
+        res.send("🔥 SUCCESS: All users and leaderboard data have been completely deleted!");
+    } catch (e) {
+        res.status(500).send("❌ Reset error");
+    }
 });
 
 app.listen(process.env.PORT || 10000);
