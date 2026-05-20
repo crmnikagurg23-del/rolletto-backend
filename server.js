@@ -22,9 +22,22 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
-// სატესტო ენდპოინტი პინგისთვის
 app.get('/api/ping', (req, res) => {
     res.send("⚡ Pong! Server is awake.");
+});
+
+// 🛠️ ახალი: საჯარო ენდპოინტი მატჩების კალენდრისთვის (ყველასთვის ხელმისაწვდომი)
+app.get('/api/public-days', async (req, res) => {
+    try {
+        const gRes = await axios.get(GAMES_URL);
+        const rows = gRes.data.split('\n').slice(1);
+        const allDays = {};
+        rows.forEach(r => {
+            const c = r.split(',').map(v => v.replace(/"/g, '').trim());
+            if(c[0]) allDays[c[0]] = { title: c[1], date: c[2], matches: c[3]?.split('|') || [], results: c[4] || null, pointsPerGame: parseInt(c[6]) || 1 };
+        });
+        res.json({ success: true, allDays });
+    } catch (e) { res.status(500).json({ success: false }); }
 });
 
 app.post('/api/signup', async (req, res) => {
@@ -126,11 +139,10 @@ app.get('/api/admin/reset-all', async (req, res) => {
     } catch (e) { res.status(500).send("❌ Reset error"); }
 });
 
-// 🚀 🛠️ სუპერ ჰაკი: ყოველ 10 წუთში სერვერი საკუთარ თავს პინგავს, რომ არ დაიძინოს!
 setInterval(() => {
     axios.get('https://rolletto-backend-1.onrender.com/api/ping')
         .then(() => console.log("🎯 Auto-Ping: Server kept awake successfully!"))
-        .catch((e) => console.log("Auto-Ping failed, but it's okay."));
-}, 600000); // 600000 ms = 10 წუთი
+        .catch((e) => console.log("Auto-Ping failed."));
+}, 600000);
 
 app.listen(process.env.PORT || 10000);
