@@ -140,6 +140,97 @@
         
         .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); padding: 15px 25px; border-radius: 10px; z-index: 2000; display: none; text-align:center; min-width: 280px; font-weight: 600; }
         .hidden { display: none !important; }
+        
+        /* 🛠️ CSS ფიქსი ტექსტის ფერებზე ყველა ეკრანისთვის (Rank, Score, Exit) */
+        
+        /* Rank/Score/Exit სათაურები - მკაფიო ნაცრისფერი */
+        .status-title {
+            font-size: 11px !important;
+            color: #a0aec0 !important; /* მკაფიო, იდეალურად წასაკითხი ნაცრისფერი */
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+            display: inline-block;
+        }
+        
+        /* რანკი და ქულა - დიდი და გამწვანებული */
+        .status-value {
+            color: #00ffcc !important; /* Rolletto-ს მწვანე */
+            font-family: 'Rajdhani', sans-serif !important;
+            font-size: 24px !important;
+            font-weight: 700 !important;
+            line-height: 1 !important;
+        }
+        
+        /* გამოსვლის სათაური - წითელი */
+        .exit-title {
+            color: #e53e3e !important; /* Rolletto-ს წითელი */
+            font-size: 11px !important;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+            display: inline-block;
+        }
+        
+        /* გამოსვლის ტექსტი - წითელი */
+        .exit-value {
+            color: #ff4d4d !important; /*Rolletto-ს წითელი */
+            font-size: 16px !important;
+            font-family: 'Rajdhani', sans-serif !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.5px;
+        }
+
+        /* 🛠️ Media Query ფიქსი მობილურებისთვის/პლანშეტებისთვის */
+        @media (max-width: 768px) {
+            /* იუზერის პანელი მობილურზე */
+            #my-status .card-auth {
+                padding: 15px !important;
+                margin-bottom: 15px !important;
+                background: rgba(6, 18, 24, 0.9) !important;
+                border: 1px solid #00ffcc !important;
+            }
+            
+            /* Rank/Score სათაურები მობილურზე - იძულებითი ნაცრისფერი */
+            .status-title {
+                font-size: 10px !important;
+                color: #a0aec0 !important; /* მკაცრად ნაცრისფერი, რომ გამოჩნდეს მუქ ფონზე */
+                display: block !important;
+                text-align: center;
+                opacity: 1 !important;
+            }
+            
+            /* რანკი/ქულა მობილურზე - ცოტა პატარა */
+            .status-value {
+                font-size: 22px !important;
+                text-align: center;
+                display: block !important;
+            }
+            
+            /* Exit სათაური მობილურზე - იძულებითი წითელი */
+            .exit-title {
+                font-size: 10px !important;
+                color: #e53e3e !important;
+                display: block !important;
+                text-align: center;
+                opacity: 1 !important;
+            }
+            
+            /* Exit ტექსტი მობილურზე - იძულებითი წითელი */
+            .exit-value {
+                font-size: 14px !important;
+                text-align: center;
+                display: block !important;
+            }
+            
+            /* შუა გამყოფი ხაზები მობილურზე */
+            .status-separator {
+                border-left: 1px solid rgba(255,255,255,0.1) !important;
+                border-right: 1px solid rgba(255,255,255,0.1) !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -151,16 +242,16 @@
             <div class="card-auth" style="padding: 20px; margin-bottom: 20px; background: rgba(6, 18, 24, 0.85); border: 1px solid var(--primary); box-shadow: 0 4px 15px rgba(0, 255, 204, 0.1);">
                 <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; text-align:center; align-items:center;">
                     <div>
-                        <span style="font-size:11px; color:#a0aec0; text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Rank</span><br>
-                        <b id="my-rank" style="color:var(--primary); font-family:'Rajdhani'; font-size:24px; font-weight:700;">-</b>
+                        <span class="status-title">Rank</span><br>
+                        <b id="my-rank" class="status-value">-</b>
                     </div>
-                    <div style="border-left: 1px solid rgba(255,255,255,0.1); border-right: 1px solid rgba(255,255,255,0.1);">
-                        <span style="font-size:11px; color:#a0aec0; text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Score</span><br>
-                        <b id="my-score" style="color:var(--primary); font-family:'Rajdhani'; font-size:24px; font-weight:700;">0</b>
+                    <div class="status-separator">
+                        <span class="status-title">Score</span><br>
+                        <b id="my-score" class="status-value">0</b>
                     </div>
                     <div onclick="logout()" style="cursor:pointer;">
-                        <span style="color:#e53e3e; font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Exit</span><br>
-                        <b style="color:#ff4d4d; font-size:16px; font-family:'Rajdhani'; font-weight:700; letter-spacing:0.5px;">OUT</b>
+                        <span class="exit-title">Exit</span><br>
+                        <b class="exit-value">OUT</b>
                     </div>
                 </div>
             </div>
