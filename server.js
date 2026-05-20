@@ -22,6 +22,11 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
+// სატესტო ენდპოინტი პინგისთვის
+app.get('/api/ping', (req, res) => {
+    res.send("⚡ Pong! Server is awake.");
+});
+
 app.post('/api/signup', async (req, res) => {
     try {
         const { user, password } = req.body;
@@ -74,7 +79,12 @@ app.post('/api/save-prediction', async (req, res) => {
 
 app.get('/api/leaderboard', async (req, res) => {
     const top = await User.find().sort({ totalScore: -1, "predictions.timestamp": 1 }).limit(10);
-    res.json({ topData: top.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore || 0 })) });
+    const prizes = {
+        1: "3000 $", 2: "2000 $", 3: "1000 $",
+        4: "800 freebet", 5: "600 freebet", 6: "500 freebet",
+        7: "300 freebet", 8: "250 freebet", 9: "200 freebet", 10: "100 freebet"
+    };
+    res.json({ topData: top.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore || 0, prize: prizes[i + 1] || "-" })) });
 });
 
 app.get('/api/admin/calculate-scores', async (req, res) => {
@@ -82,17 +92,12 @@ app.get('/api/admin/calculate-scores', async (req, res) => {
         const gRes = await axios.get(GAMES_URL);
         const rows = gRes.data.split('\n').slice(1);
         const resultsMap = {};
-        
         rows.forEach(r => {
             const c = r.split(',').map(v => v.replace(/"/g, '').trim());
             if(c[0] && c[4] && c[4].trim() !== "") {
-                resultsMap[c[0]] = { 
-                    results: c[4].split('|').map(res => res.trim().toLowerCase()), 
-                    points: parseInt(c[6]) || 1 
-                };
+                resultsMap[c[0]] = { results: c[4].split('|').map(res => res.trim().toLowerCase()), points: parseInt(c[6]) || 1 };
             }
         });
-        
         const users = await User.find();
         for (let user of users) {
             let score = 0;
@@ -113,5 +118,19 @@ app.get('/api/admin/calculate-scores', async (req, res) => {
         res.send("✅ Scores updated successfully!");
     } catch (e) { res.status(500).send("❌ Calculation error"); }
 });
+
+app.get('/api/admin/reset-all', async (req, res) => {
+    try {
+        await User.deleteMany({});
+        res.send("🔥 SUCCESS: All users and leaderboard data have been completely deleted!");
+    } catch (e) { res.status(500).send("❌ Reset error"); }
+});
+
+// 🚀 🛠️ სუპერ ჰაკი: ყოველ 10 წუთში სერვერი საკუთარ თავს პინგავს, რომ არ დაიძინოს!
+setInterval(() => {
+    axios.get('https://rolletto-backend-1.onrender.com/api/ping')
+        .then(() => console.log("🎯 Auto-Ping: Server kept awake successfully!"))
+        .catch((e) => console.log("Auto-Ping failed, but it's okay."));
+}, 600000); // 600000 ms = 10 წუთი
 
 app.listen(process.env.PORT || 10000);
