@@ -26,7 +26,6 @@ app.get('/api/ping', (req, res) => {
     res.send("⚡ Pong! Server is awake.");
 });
 
-// 🛠️ ახალი: საჯარო ენდპოინტი მატჩების კალენდრისთვის (ყველასთვის ხელმისაწვდომი)
 app.get('/api/public-days', async (req, res) => {
     try {
         const gRes = await axios.get(GAMES_URL);
@@ -90,12 +89,16 @@ app.post('/api/save-prediction', async (req, res) => {
     } else res.json({ success: false });
 });
 
+// 🛠️ განახლებული: გამოაქვს ტოპ 20 იუზერი ახალი საპრიზო ფონდით
 app.get('/api/leaderboard', async (req, res) => {
-    const top = await User.find().sort({ totalScore: -1, "predictions.timestamp": 1 }).limit(10);
+    const top = await User.find().sort({ totalScore: -1, "predictions.timestamp": 1 }).limit(20);
     const prizes = {
-        1: "3000 $", 2: "2000 $", 3: "1000 $",
-        4: "800 freebet", 5: "600 freebet", 6: "500 freebet",
-        7: "300 freebet", 8: "250 freebet", 9: "200 freebet", 10: "100 freebet"
+        1: "1500 $", 2: "1000 $", 3: "800 $",
+        4: "500 freebet", 5: "400 freebet", 6: "300 freebet",
+        7: "250 freebet", 8: "200 freebet", 9: "150 freebet", 10: "100 freebet",
+        11: "50 freebet", 12: "50 freebet", 13: "50 freebet",
+        14: "300 freebet", 15: "30 freebet", 16: "25 freebet",
+        17: "25 freebet", 18: "20 freebet", 19: "20 freebet", 20: "20 freebet"
     };
     res.json({ topData: top.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore || 0, prize: prizes[i + 1] || "-" })) });
 });
