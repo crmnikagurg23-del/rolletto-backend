@@ -79,17 +79,46 @@ app.post('/api/login', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
+// 🔒 ᲒᲐᲜᲐᲮᲚᲔᲑᲣᲚᲘ: ᲑᲔᲥᲔᲜᲓᲘᲡ ᲓᲐᲪᲕᲐ LOCKED ᲡᲢᲐᲢᲣᲡᲖᲔ
 app.post('/api/save-prediction', async (req, res) => {
-    const { username, dayId, answers } = req.body;
-    const u = await User.findOne({ username: username.toLowerCase().trim() });
-    if(u && !u.predictions.find(p => p.dayId === dayId)) {
-        u.predictions.push({ dayId, answers, timestamp: new Date() });
-        await u.save();
-        res.json({ success: true });
-    } else res.json({ success: false });
+    try {
+        const { username, dayId, answers } = req.body;
+        
+        // 1. ჯერ ვამოწმებთ Google Sheets-ს, ხომ არ არის ეს დღე ჩაკეტილი
+        const gRes = await axios.get(GAMES_URL);
+        const rows = gRes.data.split('\n').slice(1);
+        let isDayLocked = false;
+        
+        rows.forEach(r => {
+            const c = r.split(',').map(v => v.replace(/"/g, '').trim());
+            if(c[0] === dayId) {
+                const resultsValue = c[4] || "";
+                // თუ Results სვეტში წერია სიტყვა LOCKED (ნებისმიერი ასოებით), ვბლოკავთ მიღებას
+                if(resultsValue.toUpperCase().includes("LOCKED")) {
+                    isDayLocked = true;
+                }
+            }
+        });
+
+        if (isDayLocked) {
+            return res.json({ success: false, message: "This matchday is locked! Predictions are closed." });
+        }
+
+        // 2. თუ ჩაკეტილი არ არის, ჩვეულებრივად ვინახავთ ბაზაში
+        const u = await User.findOne({ username: username.toLowerCase().trim() });
+        if(u && !u.predictions.find(p => p.dayId === dayId)) {
+            u.predictions.push({ dayId, answers, timestamp: new Date() });
+            await u.save();
+            res.json({ success: true });
+        } else {
+            res.json({ success: false, message: "Prediction already exists or user not found." });
+        }
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Server error." });
+    }
 });
 
-// 🛠️ განახლებული: გამოაქვს ტოპ 20 იუზერი ახალი საპრიზო ფონდით
+// 🛠️ ᲒᲐᲡᲬᲝᲠᲔᲑᲣᲚᲘ: ᲛᲔ-14 ᲐᲓᲒᲘᲚᲖᲔ ᲐᲮᲚᲐ ᲬᲔᲠᲘᲐ 30 FREEBET (300-ᲘᲡ ᲜᲐᲪᲕᲚᲐᲓ)
 app.get('/api/leaderboard', async (req, res) => {
     const top = await User.find().sort({ totalScore: -1, "predictions.timestamp": 1 }).limit(20);
     const prizes = {
@@ -97,7 +126,7 @@ app.get('/api/leaderboard', async (req, res) => {
         4: "500 freebet", 5: "400 freebet", 6: "300 freebet",
         7: "250 freebet", 8: "200 freebet", 9: "150 freebet", 10: "100 freebet",
         11: "50 freebet", 12: "50 freebet", 13: "50 freebet",
-        14: "300 freebet", 15: "30 freebet", 16: "25 freebet",
+        14: "30 freebet", 15: "30 freebet", 16: "25 freebet",
         17: "25 freebet", 18: "20 freebet", 19: "20 freebet", 20: "20 freebet"
     };
     res.json({ topData: top.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore || 0, prize: prizes[i + 1] || "-" })) });
@@ -110,7 +139,7 @@ app.get('/api/admin/calculate-scores', async (req, res) => {
         const resultsMap = {};
         rows.forEach(r => {
             const c = r.split(',').map(v => v.replace(/"/g, '').trim());
-            if(c[0] && c[4] && c[4].trim() !== "") {
+            if(c[0] && c[4] && c[4].trim() !== "" && !c[4].toUpperCase().includes("LOCKED")) {
                 resultsMap[c[0]] = { results: c[4].split('|').map(res => res.trim().toLowerCase()), points: parseInt(c[6]) || 1 };
             }
         });
