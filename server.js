@@ -79,12 +79,11 @@ app.post('/api/login', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
-// 🔒 ᲒᲐᲜᲐᲮᲚᲔᲑᲣᲚᲘ: ᲑᲔᲥᲔᲜᲓᲘᲡ ᲓᲐᲪᲕᲐ LOCKED ᲡᲢᲐᲢᲣᲡᲖᲔ
+// 🔒 ᲒᲐᲫᲚᲘᲔᲠᲔᲑᲣᲚᲘ ᲓᲐᲪᲕᲐ: ᲪᲮᲠᲘᲚᲘᲡ ᲜᲔᲑᲘᲡᲛᲘᲔᲠ ᲡᲕᲔᲢᲨᲘ "LOCKED"-ᲘᲡ ᲞᲝᲕᲜᲘᲡᲐᲡ ᲑᲚᲝᲙᲐᲕᲡ!
 app.post('/api/save-prediction', async (req, res) => {
     try {
         const { username, dayId, answers } = req.body;
         
-        // 1. ჯერ ვამოწმებთ Google Sheets-ს, ხომ არ არის ეს დღე ჩაკეტილი
         const gRes = await axios.get(GAMES_URL);
         const rows = gRes.data.split('\n').slice(1);
         let isDayLocked = false;
@@ -92,9 +91,8 @@ app.post('/api/save-prediction', async (req, res) => {
         rows.forEach(r => {
             const c = r.split(',').map(v => v.replace(/"/g, '').trim());
             if(c[0] === dayId) {
-                const resultsValue = c[4] || "";
-                // თუ Results სვეტში წერია სიტყვა LOCKED (ნებისმიერი ასოებით), ვბლოკავთ მიღებას
-                if(resultsValue.toUpperCase().includes("LOCKED")) {
+                // 🎯 მთლიან სტრიქონს ვამოწმებთ - ნებისმიერ უჯრაში რომ ეწეროს LOCKED, ჩაიკეტება
+                if(r.toUpperCase().includes("LOCKED")) {
                     isDayLocked = true;
                 }
             }
@@ -104,21 +102,19 @@ app.post('/api/save-prediction', async (req, res) => {
             return res.json({ success: false, message: "This matchday is locked! Predictions are closed." });
         }
 
-        // 2. თუ ჩაკეტილი არ არის, ჩვეულებრივად ვინახავთ ბაზაში
         const u = await User.findOne({ username: username.toLowerCase().trim() });
         if(u && !u.predictions.find(p => p.dayId === dayId)) {
             u.predictions.push({ dayId, answers, timestamp: new Date() });
             await u.save();
-            res.json({ success: true });
+            return res.json({ success: true });
         } else {
-            res.json({ success: false, message: "Prediction already exists or user not found." });
+            return res.json({ success: false, message: "Prediction already exists or user not found." });
         }
     } catch (e) {
-        res.status(500).json({ success: false, message: "Server error." });
+        return res.status(500).json({ success: false, message: "Server error." });
     }
 });
 
-// 🛠️ ᲒᲐᲡᲬᲝᲠᲔᲑᲣᲚᲘ: ᲛᲔ-14 ᲐᲓᲒᲘᲚᲖᲔ ᲐᲮᲚᲐ ᲬᲔᲠᲘᲐ 30 FREEBET (300-ᲘᲡ ᲜᲐᲪᲕᲚᲐᲓ)
 app.get('/api/leaderboard', async (req, res) => {
     const top = await User.find().sort({ totalScore: -1, "predictions.timestamp": 1 }).limit(20);
     const prizes = {
