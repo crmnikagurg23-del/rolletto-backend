@@ -79,7 +79,6 @@ app.post('/api/login', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
-// 🔒 ᲒᲐᲫᲚᲘᲔᲠᲔᲑᲣᲚᲘ ᲓᲐᲪᲕᲐ: ᲪᲮᲠᲘᲚᲘᲡ ᲜᲔᲑᲘᲡᲛᲘᲔᲠ ᲡᲕᲔᲢᲨᲘ "LOCKED"-ᲘᲡ ᲞᲝᲕᲜᲘᲡᲐᲡ ᲑᲚᲝᲙᲐᲕᲡ!
 app.post('/api/save-prediction', async (req, res) => {
     try {
         const { username, dayId, answers } = req.body;
@@ -91,7 +90,6 @@ app.post('/api/save-prediction', async (req, res) => {
         rows.forEach(r => {
             const c = r.split(',').map(v => v.replace(/"/g, '').trim());
             if(c[0] === dayId) {
-                // 🎯 მთლიან სტრიქონს ვამოწმებთ - ნებისმიერ უჯრაში რომ ეწეროს LOCKED, ჩაიკეტება
                 if(r.toUpperCase().includes("LOCKED")) {
                     isDayLocked = true;
                 }
@@ -128,17 +126,23 @@ app.get('/api/leaderboard', async (req, res) => {
     res.json({ topData: top.map((u, i) => ({ rank: i + 1, u: u.username, p: u.totalScore || 0, prize: prizes[i + 1] || "-" })) });
 });
 
+// 🛠️ ᲒᲐᲜᲐᲮᲚᲔᲑᲣᲚᲘ: ᲥᲣᲚᲔᲑᲘᲡ ᲒᲐᲓᲐᲗᲕᲚᲐ VOID ᲛᲮᲐᲠᲓᲐᲭᲔᲠᲘᲗ
 app.get('/api/admin/calculate-scores', async (req, res) => {
     try {
         const gRes = await axios.get(GAMES_URL);
         const rows = gRes.data.split('\n').slice(1);
         const resultsMap = {};
+        
         rows.forEach(r => {
             const c = r.split(',').map(v => v.replace(/"/g, '').trim());
             if(c[0] && c[4] && c[4].trim() !== "" && !c[4].toUpperCase().includes("LOCKED")) {
-                resultsMap[c[0]] = { results: c[4].split('|').map(res => res.trim().toLowerCase()), points: parseInt(c[6]) || 1 };
+                resultsMap[c[0]] = { 
+                    results: c[4].split('|').map(res => res.trim().toLowerCase()), 
+                    points: parseInt(c[6]) || 1 
+                };
             }
         });
+        
         const users = await User.find();
         for (let user of users) {
             let score = 0;
@@ -146,9 +150,18 @@ app.get('/api/admin/calculate-scores', async (req, res) => {
                 const dayRes = resultsMap[pred.dayId];
                 if (dayRes) {
                     dayRes.results.forEach((res, i) => {
-                        if (res && ["1", "x", "2"].includes(res) && pred.answers[i]) {
+                        if (res && pred.answers[i]) {
                             const userAns = pred.answers[i].toString().toLowerCase().trim();
-                            if (userAns === res) score += dayRes.points;
+                            const targetRes = res.toLowerCase().trim();
+                            
+                            // 🎯 თუ ცხრილში წერია void, ყველას ავტომატურად ემატება მიმდინარე დღის კუთვნილი ქულა
+                            if (targetRes === "void") {
+                                score += dayRes.points;
+                            } 
+                            // წინააღმდეგ შემთხვევაში ჩვეულებრივად მოწმდება 1, X, 2
+                            else if (["1", "x", "2"].includes(targetRes) && userAns === targetRes) {
+                                score += dayRes.points;
+                            }
                         }
                     });
                 }
@@ -156,7 +169,7 @@ app.get('/api/admin/calculate-scores', async (req, res) => {
             user.totalScore = score;
             await user.save();
         }
-        res.send("✅ Scores updated successfully!");
+        res.send("✅ Scores updated successfully (with VOID support)!");
     } catch (e) { res.status(500).send("❌ Calculation error"); }
 });
 
